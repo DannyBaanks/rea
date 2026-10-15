@@ -252,4 +252,12 @@ export const MCP_TOOLS_WITHOUT_DEDICATED_CLI = Object.freeze([
   "unload_frida_script",
   "frida_session_status",
   "close_frida_session",
+  // The catalog surface exists only on the MCP adapter: it advertises and
+  // dispatches MCP capabilities, so the CLI has no dedicated command for it.
+  "rea_discover",
+  "rea_describe",
+  "rea_execute",
+  "inspect_malbolge",
+  "trace_malbolge",
+  "decompile_malbolge",
 ]);

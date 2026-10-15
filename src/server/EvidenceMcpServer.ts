@@ -6,6 +6,7 @@ import {
   isJSONRPCRequest,
   isJSONRPCNotification,
   isJSONRPCResultResponse,
+  type CallToolResult,
   type Implementation,
   type Icon,
   type JSONRPCMessage,
@@ -13,6 +14,7 @@ import {
   type RegisteredTool,
   type RequestId,
   type ScopeChallengeHandler,
+  type ServerContext,
   type StandardSchemaWithJSON,
   type ToolAnnotations,
   type ToolCallback,
@@ -90,6 +92,53 @@ const omitOutputSchemasFromToolsList = (
   } as JSONRPCMessage;
 };
 
+/**
+ * Keep only the advertised capability names in a tools/list result. Every
+ * registration stays callable; the restriction changes only what the provider
+ * receives at session start, so a compact profile cannot remove capabilities.
+ */
+const restrictAdvertisedToolsList = (
+  message: JSONRPCMessage,
+  requestId: RequestId,
+  advertised: ReadonlySet<string> | undefined,
+): JSONRPCMessage => {
+  if (
+    advertised === undefined ||
+    !isJSONRPCResultResponse(message) ||
+    message.id !== requestId ||
+    !isRecord(message.result) ||
+    !Array.isArray(message.result.tools)
+  )
+    return message;
+  return {
+    ...message,
+    result: {
+      ...message.result,
+      tools: message.result.tools.filter(
+        (tool: unknown) =>
+          isRecord(tool) &&
+          typeof tool["name"] === "string" &&
+          advertised.has(tool["name"]),
+      ),
+    },
+  } as JSONRPCMessage;
+};
+
+/** One registered capability retained for catalog dispatch. */
+export interface RegisteredOperation {
+  readonly config: {
+    readonly title?: string;
+    readonly description?: string;
+    readonly inputSchema?: unknown;
+    readonly outputSchema?: unknown;
+    readonly annotations?: ToolAnnotations;
+  };
+  readonly callback: (
+    args: unknown,
+    context: ServerContext,
+  ) => Promise<CallToolResult>;
+}
+
 /** Release every transport-owned reference for a cancelled/completed request. */
 export const forgetPendingMcpRequest = (
   pendingTools: Map<RequestId, string>,
@@ -109,6 +158,10 @@ export class EvidenceMcpServer extends McpServer {
   private readonly compactPresentation:
     | CompactInputSchemaPresentation
     | undefined;
+  /** Every registered capability, kept for catalog discovery and dispatch. */
+  private readonly operations = new Map<string, RegisteredOperation>();
+  /** Names advertised in tools/list; undefined advertises every registration. */
+  private advertisedTools: ReadonlySet<string> | undefined;
 
   constructor(
     info: Implementation,
@@ -173,11 +226,37 @@ export class EvidenceMcpServer extends McpServer {
         : undefined;
     const registeredConfig =
       inputSchema === undefined ? config : { ...config, inputSchema };
-    return super.registerTool(
+    const registered = super.registerTool(
       name,
       registeredConfig as never,
       callback as never,
     );
+    this.operations.set(name, {
+      config: registeredConfig,
+      callback: callback as unknown as RegisteredOperation["callback"],
+    });
+    return registered;
+  }
+
+  /**
+   * Advertise only the named capabilities while every registration stays
+   * callable. Passing undefined restores full advertisement. Discovery and
+   * execution remain separate operations: restricting tools/list never
+   * removes a capability or changes any handler's admission decisions.
+   */
+  advertiseOnly(names: Iterable<string> | undefined): void {
+    this.advertisedTools =
+      names === undefined ? undefined : new Set<string>(names);
+  }
+
+  /** Registered capability names in stable registration order. */
+  registeredOperationNames(): readonly string[] {
+    return [...this.operations.keys()];
+  }
+
+  /** One registered capability, or undefined when the name is not registered. */
+  registeredOperation(name: string): RegisteredOperation | undefined {
+    return this.operations.get(name);
   }
 
   /** Preserve the SDK transport lifecycle while retaining oversized errors. */
@@ -188,6 +267,7 @@ export class EvidenceMcpServer extends McpServer {
         this.recordEvidence,
         this.delivery,
         this.omitOutputSchemas,
+        () => this.advertisedTools,
       ),
     );
   }
@@ -209,6 +289,7 @@ class ErrorEvidenceTransport implements Transport {
       | undefined,
     private readonly delivery: ToolResultDelivery,
     private readonly omitOutputSchemas: boolean,
+    private readonly advertisedTools: () => ReadonlySet<string> | undefined,
   ) {
     if (transport.hasPerRequestStream !== undefined)
       this.hasPerRequestStream = transport.hasPerRequestStream;
@@ -306,9 +387,16 @@ class ErrorEvidenceTransport implements Transport {
       this.pendingToolLists.has(id);
     try {
       const recovered = this.recoverError(message, tool);
-      const advertised = omitToolSchemas
-        ? omitOutputSchemasFromToolsList(recovered, id)
-        : recovered;
+      const advertised =
+        id === undefined
+          ? recovered
+          : restrictAdvertisedToolsList(
+              omitToolSchemas
+                ? omitOutputSchemasFromToolsList(recovered, id)
+                : recovered,
+              id,
+              this.advertisedTools(),
+            );
       if (
         isJSONRPCResultResponse(advertised) &&
         isCallToolResult(advertised.result) &&

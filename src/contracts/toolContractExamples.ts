@@ -53,6 +53,15 @@ export const TOOL_EXAMPLE_OVERRIDES: Readonly<
   trace_call_path: { start: "0x1000", goal: "0x1100" },
   trace_native_ui_action: { action: "buildTapped:" },
   open_binary: { path: "/tmp/fixture" },
+  inspect_malbolge: { path: "/targets/hello.mal", instruction_limit: 64 },
+  trace_malbolge: { path: "/targets/hello.mal", max_steps: 1000 },
+  decompile_malbolge: { path: "/targets/hello.mal", max_steps: 2000 },
+  rea_discover: { query: "bundle", limit: 10 },
+  rea_describe: { name: "compare_application_versions" },
+  rea_execute: {
+    name: "search_procedures",
+    arguments: { pattern: "main" },
+  },
   export_evidence_bundle: { path: "/tmp/evidence.json" },
   get_evidence_bundle: {
     detail: "summary",

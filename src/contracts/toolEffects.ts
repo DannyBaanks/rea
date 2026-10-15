@@ -708,6 +708,30 @@ export const TOOL_EFFECTS: Readonly<Record<string, ToolEffects>> = {
   record_unknown: effects({ mutatesSession: true, idempotent: false }),
   update_unknown: effects({ mutatesSession: true, idempotent: false }),
   verify_unknown_resolution: effects(),
+  inspect_malbolge: evidence,
+  // Bounded in-process emulation drives target-provided Malbolge code, so the
+  // target-execution effect stays visible even though nothing leaves the VM.
+  trace_malbolge: effects({
+    mutatesSession: true,
+    executesForeignCode: true,
+  }),
+  decompile_malbolge: effects({
+    mutatesSession: true,
+    executesForeignCode: true,
+  }),
+  rea_discover: effects(),
+  rea_describe: effects(),
+  // Dispatches to another capability, so every effect that capability can
+  // produce, including foreign-code execution, stays reachable through it.
+  rea_execute: effects({
+    mutatesSession: true,
+    launchesProcess: true,
+    accessesNetwork: true,
+    writesFilesystem: true,
+    mutatesDevice: true,
+    executesForeignCode: true,
+    idempotent: false,
+  }),
 };
 
 /** Derive MCP annotations without tool-name or tool-family heuristics. */

@@ -17,6 +17,7 @@ import {
 } from "./providerStartupTimeout.js";
 import { mcpInputSchemaProfileSchema } from "./mcpInputSchemaProfile.js";
 import { mcpOutputSchemaProfileSchema } from "./mcpOutputSchemaProfile.js";
+import { mcpToolProfileSchema } from "./mcpToolProfile.js";
 import { mcpResponseBudgetSchema } from "./mcpResponseBudget.js";
 import { parseLoaderArgs, parseStringArray } from "./parsers.js";
 
@@ -25,6 +26,7 @@ const environmentSchema = z.object({
   REA_MCP_MAX_RESPONSE_BYTES: mcpResponseBudgetSchema.optional(),
   REA_MCP_INPUT_SCHEMA_PROFILE: mcpInputSchemaProfileSchema.optional(),
   REA_MCP_OUTPUT_SCHEMA_PROFILE: mcpOutputSchemaProfileSchema.optional(),
+  REA_MCP_TOOL_PROFILE: mcpToolProfileSchema.optional(),
   REA_IDA_MCP_CONFIG: z
     .string()
     .min(1)

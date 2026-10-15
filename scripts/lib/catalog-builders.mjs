@@ -120,7 +120,13 @@ export const toolFamilyCatalog = (sources) => {
         ...sources.webScriptContracts.WEB_SCRIPT_TOOL_CONTRACTS,
         ...sources.javascriptRecoveryContracts
           .JAVASCRIPT_RECOVERY_TOOL_CONTRACTS,
+        ...sources.catalogToolContracts.CATALOG_TOOL_CONTRACTS,
       ],
+    },
+    {
+      id: "malbolge",
+      surface: "malbolge-provider",
+      contracts: sources.malbolgeContracts.MALBOLGE_TOOL_CONTRACTS,
     },
     {
       id: "session",

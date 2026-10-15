@@ -100,6 +100,8 @@ const SOURCE_PATHS = {
   javascriptRuntimeObservationContracts:
     "dist/contracts/javascript/javascriptRuntimeObservationToolContracts.js",
   applicationContracts: "dist/contracts/applicationToolContracts.js",
+  catalogToolContracts: "dist/contracts/catalogToolContracts.js",
+  malbolgeContracts: "dist/contracts/malbolge/malbolgeToolContracts.js",
   analysisViewContracts: "dist/contracts/analysisViewToolContracts.js",
   webScriptContracts: "dist/contracts/webScriptToolContracts.js",
   javascriptRecoveryContracts:

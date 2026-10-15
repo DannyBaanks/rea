@@ -42,6 +42,7 @@ import {
 } from "./toolResult.js";
 import { parseMcpResponseBudget } from "../config/mcpResponseBudget.js";
 import { parseMcpOutputSchemaProfile } from "../config/mcpOutputSchemaProfile.js";
+import { parseMcpToolProfile } from "../config/mcpToolProfile.js";
 import {
   compactPresentationForMcpInputSchemaProfile,
   parseMcpInputSchemaProfile,
@@ -135,6 +136,10 @@ import { GdbSessionManager } from "../gdb/GdbSessionManager.js";
 import { registerGdbTools } from "./registerGdbTools.js";
 import { RizinDebugSessionManager } from "../rizin/RizinDebugSessionManager.js";
 import { registerRizinDebugTools } from "./registerRizinDebugTools.js";
+import { MalbolgeService } from "../application/malbolge/MalbolgeService.js";
+import { registerMalbolgeTools } from "./registerMalbolgeTools.js";
+import { registerCatalogTools } from "./registerCatalogTools.js";
+import { advertisedToolNamesForProfile } from "../config/mcpToolProfile.js";
 
 const TARGET_FREE_INSTRUCTIONS =
   "REA provides reverse-engineering tools for local artifacts, native binaries, managed code, browser pages, and runtimes. Use the tool that directly answers the question; discover targets or inspect inventory only when needed. Tool results include inline Evidence and report their coverage and limitations.";
@@ -290,6 +295,7 @@ export const createServer = (
   const analysis = source.kind === "session" ? source.session : source.analysis;
   const environment = snapshotEnvironment(options.environment ?? process.env);
   const omitOutputSchemas = outputSchemasOmitted(environment);
+  const advertisedToolNames = selectAdvertisedToolNames(environment);
   const providerEnvironment = captureProviderEnvironment(
     options.providerEnvironment,
     environment,
@@ -339,6 +345,7 @@ export const createServer = (
     selectCompactInputSchemaPresentation(environment),
     omitOutputSchemas,
   );
+  server.advertiseOnly(advertisedToolNames);
   const gdbSessions = new GdbSessionManager({
     environment: providerEnvironment,
   });
@@ -567,6 +574,14 @@ export const createServer = (
     analysisAdmission,
   );
   registerObservationTools(toolContext);
+  registerMalbolgeTools(
+    server,
+    new MalbolgeService(),
+    toolLogger,
+    recordEvidence,
+    analysisAdmission,
+  );
+  registerCatalogTools(server);
   registerGuidedPrompts(server, analysis, session);
   if (session !== undefined) {
     registerSessionTools(server, session, toolLogger, {
@@ -618,6 +633,19 @@ const selectCompactInputSchemaPresentation = (
   );
   if (!configured.ok) throw configured.error;
   return compactPresentationForMcpInputSchemaProfile(configured.value);
+};
+
+/**
+ * Select which capability names tools/list advertises. The full profile
+ * advertises every registration; the compact profile advertises only the
+ * catalog tools, leaving the complete catalog registered and callable.
+ */
+const selectAdvertisedToolNames = (
+  environment: Readonly<NodeJS.ProcessEnv>,
+): ReadonlySet<string> | undefined => {
+  const configured = parseMcpToolProfile(environment.REA_MCP_TOOL_PROFILE);
+  if (!configured.ok) throw configured.error;
+  return advertisedToolNamesForProfile(configured.value);
 };
 
 const registerConfiguredAnalysisTools = (
