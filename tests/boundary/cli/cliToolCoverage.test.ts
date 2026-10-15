@@ -106,6 +106,10 @@ const MCP_TOOLS_WITHOUT_DEDICATED_CLI = Object.freeze([
   "check_build_task",
   "measure_build_task",
   "record_build_consent",
+  // Fork: Classic Malbolge analysis has no dedicated CLI command.
+  "inspect_malbolge",
+  "trace_malbolge",
+  "decompile_malbolge",
 ]);
 
 describe("CLI canonical tool coverage", () => {

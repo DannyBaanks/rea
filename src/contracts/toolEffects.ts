@@ -911,6 +911,17 @@ const TOOL_EFFECT_AUDIT: Readonly<Record<string, EffectAudit>> = {
   record_unknown: effects({ mutatesSession: true, idempotent: false }),
   update_unknown: effects({ mutatesSession: true, idempotent: false }),
   verify_unknown_resolution: effects(),
+  inspect_malbolge: evidence,
+  // Bounded in-process emulation drives target-provided Malbolge code, so the
+  // target-execution effect stays visible even though nothing leaves the VM.
+  trace_malbolge: effects({
+    mutatesSession: true,
+    executesForeignCode: true,
+  }),
+  decompile_malbolge: effects({
+    mutatesSession: true,
+    executesForeignCode: true,
+  }),
 };
 
 const sessionEffects = (audit: EffectAudit): ToolEffects =>

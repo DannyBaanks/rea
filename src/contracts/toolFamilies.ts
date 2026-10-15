@@ -48,6 +48,7 @@ import { OFFICIAL_TOOL_CONTRACTS } from "./officialToolContracts.js";
 import { ENHANCED_TOOL_CONTRACTS } from "./enhancedToolContracts.js";
 import { SESSION_TOOL_CONTRACTS } from "./sessionToolContracts.js";
 import { FRIDA_TOOL_CONTRACTS } from "./fridaToolContracts.js";
+import { MALBOLGE_TOOL_CONTRACTS } from "./malbolge/malbolgeToolContracts.js";
 import { TOOL_CONTRACTS } from "./toolContracts.js";
 import type { ToolFamilyId } from "./toolFamilyIds.js";
 
@@ -85,6 +86,7 @@ export const TOOL_CONTRACT_GROUPS = {
   JAVASCRIPT_RUNTIME_OBSERVATION_TOOL_CONTRACTS,
   JEB_TOOL_CONTRACTS,
   MANAGED_TOOL_CONTRACTS,
+  MALBOLGE_TOOL_CONTRACTS,
   MANAGED_WORKFLOW_TOOL_CONTRACTS,
   MODEL_TOOL_CONTRACTS,
   NATIVE_TOOL_CONTRACTS,
@@ -245,6 +247,11 @@ export const TOOL_FAMILY_DEFINITIONS = [
       ...TOOL_CONTRACT_GROUPS.WEB_SCRIPT_TOOL_CONTRACTS,
       ...TOOL_CONTRACT_GROUPS.JAVASCRIPT_RECOVERY_TOOL_CONTRACTS,
     ],
+  },
+  {
+    id: "malbolge",
+    surface: "malbolge-provider",
+    contracts: TOOL_CONTRACT_GROUPS.MALBOLGE_TOOL_CONTRACTS,
   },
   {
     id: "session",

@@ -20,6 +20,11 @@ import { parseMcpOutputSchemaProfile } from "./config/mcpOutputSchemaProfile.js"
 import { parseMcpToolFamilies } from "./config/mcpToolFamilies.js";
 import { parseMcpToolCatalogProfile } from "./config/mcpToolCatalogProfile.js";
 import {
+  CATALOG_TOOL_NAMES,
+  parseMcpToolProfile,
+} from "./config/mcpToolProfile.js";
+import { compactCatalogIdentity } from "./catalogDispatch.js";
+import {
   DISCOVER_TOOLS,
   HOT_TOOL_NAMES,
   progressiveCatalogIdentity,
@@ -606,6 +611,10 @@ const doctorExpectationForEnvironment = (
     environment.REA_MCP_TOOL_CATALOG_PROFILE,
   );
   const progressive = catalogProfile.ok && catalogProfile.value === "hot-cold";
+  // Fork: compact dispatch advertises exactly its three catalog tools.
+  const toolProfile = parseMcpToolProfile(environment.REA_MCP_TOOL_PROFILE);
+  const compact =
+    !progressive && toolProfile.ok && toolProfile.value === "compact";
   const catalog = createCatalogIdentity({
     compactPresentation: compactPresentationForMcpInputSchemaProfile(
       inputProfile.ok ? inputProfile.value : undefined,
@@ -617,15 +626,21 @@ const doctorExpectationForEnvironment = (
     promptContracts,
   });
   return {
-    catalog: progressive ? progressiveCatalogIdentity(catalog) : catalog,
-    expectedToolNames: progressive
-      ? [
-          ...contracts
-            .map(({ name }) => name)
-            .filter((name) => HOT_TOOL_NAMES.has(name)),
-          DISCOVER_TOOLS.name,
-        ]
-      : contracts.map(({ name }) => name),
+    catalog: progressive
+      ? progressiveCatalogIdentity(catalog)
+      : compact
+        ? compactCatalogIdentity(catalog)
+        : catalog,
+    expectedToolNames: compact
+      ? [...CATALOG_TOOL_NAMES]
+      : progressive
+        ? [
+            ...contracts
+              .map(({ name }) => name)
+              .filter((name) => HOT_TOOL_NAMES.has(name)),
+            DISCOVER_TOOLS.name,
+          ]
+        : contracts.map(({ name }) => name),
     expectedPromptNames: promptContracts.map(({ name }) => name),
   };
 };

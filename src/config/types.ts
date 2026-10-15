@@ -8,6 +8,7 @@ import type { GhidraLanguageOverride } from "./ghidraLanguageOverride.js";
 import type { McpInputSchemaProfile } from "./mcpInputSchemaProfile.js";
 import type { McpOutputSchemaProfile } from "./mcpOutputSchemaProfile.js";
 import type { McpToolCatalogProfile } from "./mcpToolCatalogProfile.js";
+import type { McpToolProfile } from "./mcpToolProfile.js";
 import type { BridgeMaxRequestBytes } from "./bridgeMaxRequestBytes.js";
 import type { RegexMatchingDeadline } from "./regexMatchingDeadline.js";
 import type { RegexWorkerHeapRequest } from "./regexWorkerHeapRequest.js";
@@ -22,6 +23,8 @@ export interface AppConfig {
   readonly mcpInputSchemaProfile?: McpInputSchemaProfile;
   readonly mcpOutputSchemaProfile?: McpOutputSchemaProfile;
   readonly mcpToolCatalogProfile?: McpToolCatalogProfile;
+  /** Fork: compact dispatch advertisement (rea_discover/describe/execute). */
+  readonly mcpToolProfile?: McpToolProfile;
   readonly analysisProvider: AnalysisProviderSelector;
   readonly idaMcpConfigPath?: string;
   readonly ghidraInstallDir: string | undefined;

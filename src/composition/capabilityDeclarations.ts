@@ -37,6 +37,7 @@ import {
   JAVASCRIPT_RUNTIME_RECONCILIATION_PROVIDER,
   KERNEL_BUILD_CONFIG_PROVIDER,
   KERNEL_MODULE_PROVIDER,
+  MALBOLGE_CLASSIC_PROVIDER,
   MANAGED_STATIC_PROVIDER,
   MANAGED_WORKFLOW_PROVIDER,
   NATIVE_EXPORTS_PROVIDER,
@@ -399,6 +400,13 @@ export const CAPABILITY_DECLARATIONS = {
   },
   kuna: {
     providers: [providerBinding(KUNA_PROVIDER_IDENTITY, KUNA_OPERATIONS)],
+  },
+  malbolgeClassic: {
+    providers: [
+      providerBinding(MALBOLGE_CLASSIC_PROVIDER, {
+        group: "MALBOLGE_TOOL_CONTRACTS",
+      }),
+    ],
   },
   managedStatic: {
     providers: [

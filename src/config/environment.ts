@@ -24,6 +24,7 @@ import {
 import { mcpInputSchemaProfileSchema } from "./mcpInputSchemaProfile.js";
 import { mcpOutputSchemaProfileSchema } from "./mcpOutputSchemaProfile.js";
 import { mcpToolCatalogProfileSchema } from "./mcpToolCatalogProfile.js";
+import { mcpToolProfileSchema } from "./mcpToolProfile.js";
 import { mcpResponseBudgetSchema } from "./mcpResponseBudget.js";
 import { debuggerSessionLimitEnvironmentShape } from "./debuggerSessionLimits.js";
 import {
@@ -50,6 +51,7 @@ const environmentSchema = z.object({
   REA_MCP_TOOL_FAMILIES: mcpToolFamiliesSchema.optional(),
   REA_MCP_OUTPUT_SCHEMA_PROFILE: mcpOutputSchemaProfileSchema.optional(),
   REA_MCP_TOOL_CATALOG_PROFILE: mcpToolCatalogProfileSchema.optional(),
+  REA_MCP_TOOL_PROFILE: mcpToolProfileSchema.optional(),
   REA_IDA_MCP_CONFIG: z
     .string()
     .min(1)

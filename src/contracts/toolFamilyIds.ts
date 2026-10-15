@@ -23,6 +23,7 @@ export const TOOL_FAMILY_IDS = [
   "electron",
   "javascript-runtime",
   "application",
+  "malbolge",
   "session",
 ] as const;
 

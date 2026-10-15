@@ -40,6 +40,16 @@ export const PE_IMPORTS_PROVIDER = Object.freeze({
   version: "1",
 } as const);
 
+/**
+ * Provider identity for the in-process Classic Malbolge engine: a bounded,
+ * literal port of the canonical ISyCo interpreter that never leaves the VM.
+ */
+export const MALBOLGE_CLASSIC_PROVIDER = Object.freeze({
+  id: "rea-malbolge-classic",
+  name: "REA Malbolge Classic engine",
+  version: "1",
+} as const);
+
 /** Provider identity for portable, execution-free Shell Link decoding. */
 export const WINDOWS_SHORTCUT_PROVIDER = Object.freeze({
   id: "rea-windows-shortcut",

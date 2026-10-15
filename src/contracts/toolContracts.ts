@@ -46,6 +46,7 @@ import { GDB_TOOL_CONTRACTS } from "./gdbToolContracts.js";
 import { RIZIN_DEBUG_TOOL_CONTRACTS } from "./rizinDebugToolContracts.js";
 import { FRIDA_TOOL_CONTRACTS } from "./fridaToolContracts.js";
 import { ENVIRONMENT_TOOL_CONTRACTS } from "./environmentToolContracts.js";
+import { MALBOLGE_TOOL_CONTRACTS } from "./malbolge/malbolgeToolContracts.js";
 
 /** Complete ordered public inventory used by registration and verification. */
 export const TOOL_CONTRACTS = [
@@ -91,6 +92,7 @@ export const TOOL_CONTRACTS = [
   ...ENVIRONMENT_TOOL_CONTRACTS,
   ...DESKTOP_BUILD_TOOL_CONTRACTS,
   ...JAVASCRIPT_RECOVERY_TOOL_CONTRACTS,
+  ...MALBOLGE_TOOL_CONTRACTS,
   ...SESSION_TOOL_CONTRACTS,
   ...CUTTER_TOOL_CONTRACTS,
   ...REVERSE_ENGINEERING_TOOL_CONTRACTS,

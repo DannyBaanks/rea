@@ -22,6 +22,7 @@ export const TOOL_KINDS = [
   "jeb-provider",
   "adb-provider",
   "firmware-provider",
+  "malbolge-provider",
   "browser-provider",
   "electron-provider",
   "runtime-provider",

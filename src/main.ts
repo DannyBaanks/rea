@@ -103,12 +103,16 @@ export const run = async (
   // scoped one composes the canonical scope itself instead of advertising
   // tools whose identity the runtime cannot verify.
   const scopedToolFamilies = environment.REA_MCP_TOOL_FAMILIES !== undefined;
+  // Fork: compact dispatch advertises its own three-tool surface over the
+  // canonical registrations, so the recorded full catalog cannot serve it.
+  const compactDispatch = config.value.mcpToolProfile === "compact";
   if (
     RECORDED_MCP_CATALOG_SHA256 !== undefined &&
     dependencies.transport !== "http" &&
     config.value.hopperTargetPath === undefined &&
     fullOutputCatalog &&
     !scopedToolFamilies &&
+    !compactDispatch &&
     dependencies.createServer === undefined &&
     dependencies.loadOptionalProviders === undefined
   ) {

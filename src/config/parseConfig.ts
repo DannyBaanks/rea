@@ -23,6 +23,7 @@ import { hopperCallerScanBudgetFromEnvironment } from "./hopperCallerScanBudget.
 import { DEFAULT_REGEX_MATCHING_DEADLINE } from "./regexMatchingDeadline.js";
 import { DEFAULT_REGEX_WORKER_HEAP_REQUEST } from "./regexWorkerHeapRequest.js";
 import type { AppConfig } from "./types.js";
+import { COMPACT_WITH_HOT_COLD_CONSTRAINT } from "./mcpToolProfile.js";
 import { hopperLauncherDiscovery } from "../application/HopperLauncherDiscovery.js";
 import { localMacHopperRenamedLauncherCandidates } from "../application/MacHopperPaths.js";
 const executableAvailable = (path: string): boolean => {
@@ -118,6 +119,20 @@ export const parseConfig = (
   const parsed = parseEnvironment(nativeAnalysisEnvironment(environment));
   if (!parsed.ok) return parsed;
   const env = parsed.value;
+  if (
+    env.REA_MCP_TOOL_PROFILE === "compact" &&
+    env.REA_MCP_TOOL_CATALOG_PROFILE === "hot-cold"
+  )
+    return err(
+      new ConfigurationError(COMPACT_WITH_HOT_COLD_CONSTRAINT, {
+        settings: [
+          {
+            setting: "REA_MCP_TOOL_PROFILE",
+            constraint: COMPACT_WITH_HOT_COLD_CONSTRAINT,
+          },
+        ],
+      }),
+    );
   const invalidRuntimeSeeds: Partial<
     Record<AnalysisSettingId, ConfigurationError>
   > = {};
@@ -159,6 +174,9 @@ export const parseConfig = (
     ...(env.REA_MCP_TOOL_CATALOG_PROFILE === undefined
       ? {}
       : { mcpToolCatalogProfile: env.REA_MCP_TOOL_CATALOG_PROFILE }),
+    ...(env.REA_MCP_TOOL_PROFILE === undefined
+      ? {}
+      : { mcpToolProfile: env.REA_MCP_TOOL_PROFILE }),
     analysisProvider: env.REA_ANALYSIS_PROVIDER,
     ...(env.REA_IDA_MCP_CONFIG === undefined
       ? {}

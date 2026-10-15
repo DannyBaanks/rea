@@ -242,6 +242,8 @@ export const createCli = (
       registerWebSourceLocationCommands(cli, logger, environment);
       registerApplicationCommands(cli, logger);
     },
+    // Classic Malbolge analysis is MCP-only: it has no dedicated CLI command.
+    malbolge: () => undefined,
     session: () =>
       registerNativeFunctionMatchingCommands(cli, logger, environment),
   });

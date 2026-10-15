@@ -56,6 +56,9 @@ export const TOOL_EXAMPLE_OVERRIDES: Readonly<
   decompile_all: { output_directory: "/tmp/decompile-out" },
   open_binary: { path: "/tmp/fixture" },
   open_bundle_resources: { path: "/tmp/Fixture.app" },
+  inspect_malbolge: { path: "/targets/hello.mal", instruction_limit: 64 },
+  trace_malbolge: { path: "/targets/hello.mal", max_steps: 1000 },
+  decompile_malbolge: { path: "/targets/hello.mal", max_steps: 2000 },
   export_evidence_bundle: { path: "/tmp/evidence.json" },
   get_evidence_bundle: {
     detail: "summary",

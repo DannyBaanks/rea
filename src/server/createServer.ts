@@ -110,6 +110,14 @@ import { registerReverseEngineeringTools } from "./registerReverseEngineeringToo
 import { registerCutterTools } from "./registerCutterTools.js";
 import { registerGdbTools } from "./registerGdbTools.js";
 import { registerRizinDebugTools } from "./registerRizinDebugTools.js";
+import { registerMalbolgeTools } from "./registerMalbolgeTools.js";
+import { installCompactDispatchCatalog } from "./CompactDispatchCatalog.js";
+import { ConfigurationError } from "../domain/configurationErrors.js";
+import {
+  COMPACT_WITH_HOT_COLD_CONSTRAINT,
+  parseMcpToolProfile,
+} from "../config/mcpToolProfile.js";
+import { MalbolgeService } from "../application/malbolge/MalbolgeService.js";
 
 export interface CreateServerOptions extends CapabilityServiceOptions {
   readonly analysisSettings?: AnalysisSettings;
@@ -183,6 +191,10 @@ export const createServer = (
     environment.REA_MCP_TOOL_CATALOG_PROFILE,
   );
   if (!catalogProfile.ok) throw catalogProfile.error;
+  const toolProfile = parseMcpToolProfile(environment.REA_MCP_TOOL_PROFILE);
+  if (!toolProfile.ok) throw toolProfile.error;
+  if (toolProfile.value === "compact" && catalogProfile.value === "hot-cold")
+    throw new ConfigurationError(COMPACT_WITH_HOT_COLD_CONSTRAINT);
   const advertisedToolFamilies = selectAdvertisedToolFamilies(environment);
   const providerEnvironment = captureProviderEnvironment(
     options.providerEnvironment,
@@ -882,6 +894,14 @@ export const createServer = (
       });
       registerDesktopBuildTools(server, desktopBuildComputers, toolLogger);
     },
+    malbolge: () =>
+      registerMalbolgeTools(
+        server,
+        new MalbolgeService(),
+        toolLogger,
+        recordEvidence,
+        analysisAdmission,
+      ),
     session: () => {
       if (session === undefined) return;
       registerSessionTools(server, session, toolLogger, {
@@ -897,6 +917,7 @@ export const createServer = (
   });
   registerGuidedPrompts(server, analysis, session);
   if (catalogProfile.value === "hot-cold") server.enableProgressiveCatalog();
+  if (toolProfile.value === "compact") installCompactDispatchCatalog(server);
   return server;
 };
 

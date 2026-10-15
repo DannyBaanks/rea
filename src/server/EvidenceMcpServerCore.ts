@@ -353,6 +353,33 @@ export class EvidenceMcpServerCore extends RequestTrackingMcpServer {
     });
   }
 
+  /** Canonical registrations by name, for catalog surfaces composed outside this class. */
+  registeredTools(): ReadonlyMap<string, RegisteredTool> {
+    return this.registrations;
+  }
+
+  /**
+   * Register a transport-level catalog tool (fork: compact dispatch). Like
+   * `discover_tools`, it has no family and no analysis lifecycle, so family
+   * scoping does not disable it and it never enters the registrations map.
+   */
+  registerCatalogSurfaceTool(
+    name: string,
+    config: StandardToolRegistration,
+    callback: (input: never, context: never) => unknown,
+  ): RegisteredTool {
+    return super.registerTool(name, config as never, callback as never);
+  }
+
+  /** A catalog surface that changes the advertisement owns its identity. */
+  adoptCatalogIdentity(
+    identity: ReturnType<typeof createCatalogIdentity>,
+  ): void {
+    if (this.progressiveCatalog !== undefined)
+      throw new Error("A progressive catalog already owns the identity");
+    this.identity = identity;
+  }
+
   override sendToolListChanged(): void {
     if (this.catalogChangeDepth > 0) this.catalogChanged = true;
     else super.sendToolListChanged();

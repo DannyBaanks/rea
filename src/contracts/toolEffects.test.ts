@@ -43,6 +43,7 @@ describe("tool effects", () => {
       "close_gdb_session",
       "close_rizin_debug_session",
       "cutter_command",
+      "decompile_malbolge",
       "execute_rizin_command",
       "export_build_environment",
       "gdb_console",
@@ -60,6 +61,7 @@ describe("tool effects", () => {
       "start_build_computer",
       "start_rizin_debug_session",
       "stop_adb_app",
+      "trace_malbolge",
       "uninstall_adb_package",
     ]);
     for (const contract of destructive)
