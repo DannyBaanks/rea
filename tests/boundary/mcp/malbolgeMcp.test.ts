@@ -5,7 +5,10 @@ import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { STDIO_DEFAULT_MAX_BUFFER_SIZE } from "@modelcontextprotocol/server";
 import { describe, expect, it } from "vitest";
 
-import { MalbolgeService } from "../../../src/application/malbolge/MalbolgeService.js";
+import {
+  MAX_MALBOLGE_SOURCE_BYTES,
+  MalbolgeService,
+} from "../../../src/application/malbolge/MalbolgeService.js";
 import { TOOL_CONTRACTS } from "../../../src/contracts/toolContracts.js";
 import { silentLogger } from "../../../src/logger.js";
 import { EvidenceMcpServer } from "../../../src/server/EvidenceMcpServer.js";
@@ -132,5 +135,45 @@ describe("Malbolge MCP boundary", () => {
       path: invalidPath,
     });
     expect(invalid.isError).toBe(true);
+  });
+
+  it("F. traces carry a stable execution identity and the state transformation", async () => {
+    const path = await writeProgram("hello.mal", HELLO_WORLD_SOURCE);
+    const result = await callTool("trace_malbolge", {
+      path,
+      max_steps: 1000,
+    });
+    expect(result.isError).not.toBe(true);
+    const value = normalizedResult(result) as Record<string, unknown>;
+    expect(value["execution_id"]).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u,
+    );
+    const run = value["run"] as Record<string, unknown>;
+    expect(run["writebacks"]).toBe(71);
+    expect(run["representation_changes"]).toBe(71);
+    expect(run["state_digest_before"]).toMatch(/^[a-f0-9]{64}$/u);
+    expect(run["state_digest_after"]).toMatch(/^[a-f0-9]{64}$/u);
+    expect(run["state_digest_before"]).not.toBe(run["state_digest_after"]);
+    const events = value["events"] as Record<string, unknown>[];
+    const firstWrites = events[0]?.["writes"] as Record<string, number>[];
+    expect(firstWrites).toEqual([
+      { position: 0, value_before: 40, value_after: 121 },
+    ]);
+    // The artifact digest is the identity anchor: executing the program
+    // mutates the in-memory machine, never the source on disk.
+    const artifact = value["artifact"] as Record<string, unknown>;
+    const reread = await callTool("inspect_malbolge", { path });
+    const rereadArtifact = (
+      normalizedResult(reread) as Record<string, unknown>
+    )["artifact"] as Record<string, unknown>;
+    expect(rereadArtifact["sha256"]).toBe(artifact["sha256"]);
+  });
+
+  it("G. refuses oversized sources before reading them", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "rea-malbolge-cap-"));
+    const path = join(directory, "huge.mb");
+    await writeFile(path, "a".repeat(MAX_MALBOLGE_SOURCE_BYTES + 1), "utf8");
+    const refused = await callTool("trace_malbolge", { path });
+    expect(refused.isError).toBe(true);
   });
 });

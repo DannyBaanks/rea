@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { isAbsolute } from "node:path";
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 
 import type { ExecutionOptions } from "../AnalysisProvider.js";
 import type { AnalysisError } from "../../domain/analysisErrorBase.js";
@@ -33,6 +33,14 @@ const PROVIDER = {
   version: PRODUCT_IDENTITY.packageVersion,
 } as const;
 
+/**
+ * Source-size guard: refuse oversized artifacts before reading them. Classic
+ * Malbolge cannot exceed the 59049-word address space anyway, and generated
+ * extended-Malbolge cores reach hundreds of megabytes; reading those would
+ * only burn host memory before a guaranteed rejection.
+ */
+export const MAX_MALBOLGE_SOURCE_BYTES = 8 * 1024 * 1024;
+
 /** Read one bounded UTF-8 source file and its stable digest. */
 const readSource = async (
   operation: string,
@@ -47,6 +55,28 @@ const readSource = async (
     AnalysisError
   >
 > => {
+  let size: number;
+  try {
+    size = (await stat(path)).size;
+  } catch {
+    size = 0; // unreadable paths surface through readFile below
+  }
+  if (size > MAX_MALBOLGE_SOURCE_BYTES)
+    return err(
+      new AnalysisInputError(
+        operation,
+        {
+          userMessage: `The selected Malbolge source exceeds the ${MAX_MALBOLGE_SOURCE_BYTES} byte analysis cap (${size} bytes): ${path}`,
+        },
+        [
+          {
+            path: ["path"],
+            reason: "invalid_value",
+            message: `The selected file is ${size} bytes, above the ${MAX_MALBOLGE_SOURCE_BYTES} byte Malbolge analysis cap; extended-Malbolge cores need a streaming engine and are refused before reading.`,
+          },
+        ],
+      ),
+    );
   let raw: Buffer;
   try {
     raw = await readFile(path);
@@ -236,19 +266,29 @@ export class MalbolgeService {
         sha256: read.value.sha256,
         bytes: read.value.bytes,
       },
+      execution_id: randomUUID(),
       run: {
         steps: run.steps,
         status: run.status,
         invalid_reason: run.invalid_reason,
         events_truncated: run.events_truncated,
         peak_position: run.peak_position,
+        writebacks: run.writebacks,
+        representation_changes: run.representation_changes,
+        state_digest_before: run.state_digest_before ?? "",
+        state_digest_after: run.state_digest_after ?? "",
       },
       output_text: Buffer.from(run.output_bytes).toString("latin1"),
       output_bytes: [...run.output_bytes],
-      events: run.events.map((event) => ({ ...event })),
+      events: run.events.map((event) => ({
+        ...event,
+        writes: event.writes.map((write) => ({ ...write })),
+      })),
       limitations: [
         "The trace replays Classic Malbolge semantics in a bounded in-process engine; memory past the program is the canonical crazy chain, never the host.",
         "Output text is decoded as latin-1 bytes, exactly as the canonical interpreter reports it.",
+        "Each step records its memory writes (rotate/crazy stores plus the post-instruction self-encryption) with before and after values; state digests are SHA-256 over the comma-joined 59049-word machine at load time and at the reported stop.",
+        "Malbolge is self-modifying by design: a revisited position may decode to a different instruction than on its first visit, and the trace reports the post-transformation decode each time.",
       ],
     };
     return ok(
@@ -346,6 +386,10 @@ export class MalbolgeService {
         invalid_reason: decompiled.run.invalid_reason,
         events_truncated: decompiled.run.events_truncated,
         peak_position: decompiled.run.peak_position,
+        writebacks: decompiled.run.writebacks,
+        representation_changes: decompiled.run.representation_changes,
+        state_digest_before: decompiled.run.state_digest_before ?? "",
+        state_digest_after: decompiled.run.state_digest_after ?? "",
       },
       limitations: [
         "This is a trace-based structural projection, not a universal Malbolge decompiler; arbitrary Classic Malbolge decompilation remains an open problem.",
