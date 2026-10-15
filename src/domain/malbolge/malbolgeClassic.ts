@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 /**
  * Classic Malbolge engine ported from the canonical ISyCo interpreter
  * (`workspace/assembly/malbolge/malbolge_interpreter.py`), which documents
@@ -89,6 +91,13 @@ export type MalbolgeOpcode =
 
 export type MalbolgeRunStatus = "HALTED" | "MAX_STEPS" | "INVALID";
 
+/** One memory write observed during a step: the transformation record. */
+export interface MalbolgeWriteEvent {
+  readonly position: number;
+  readonly value_before: number;
+  readonly value_after: number;
+}
+
 export interface MalbolgeStepEvent {
   readonly step: number;
   readonly position: number;
@@ -96,6 +105,7 @@ export interface MalbolgeStepEvent {
   readonly opcode_name: MalbolgeOpcode;
   readonly a: number;
   readonly d: number;
+  readonly writes: readonly MalbolgeWriteEvent[];
 }
 
 export interface MalbolgeRunResult {
@@ -107,7 +117,17 @@ export interface MalbolgeRunResult {
   readonly events_truncated: boolean;
   readonly executed_positions: ReadonlySet<number>;
   readonly peak_position: number;
+  readonly writebacks: number;
+  readonly representation_changes: number;
+  /** SHA-256 over the comma-joined 59049-word machine at load time. */
+  readonly state_digest_before: string | null;
+  /** SHA-256 over the comma-joined 59049-word machine at the reported stop. */
+  readonly state_digest_after: string | null;
 }
+
+/** Deterministic state fingerprint: SHA-256 over comma-joined decimal words. */
+const digestMemory = (memory: Int32Array): string =>
+  createHash("sha256").update(memory.join(",")).digest("hex");
 
 const isSpace = (character: string): boolean =>
   " \t\n\r\f\v".includes(character);
@@ -175,8 +195,13 @@ export const runMalbolge = (
       events_truncated: false,
       executed_positions: new Set(),
       peak_position: 0,
+      writebacks: 0,
+      representation_changes: 0,
+      state_digest_before: null,
+      state_digest_after: null,
     };
   const memory = loaded.memory;
+  const digestBefore = digestMemory(memory);
   const captureLimit = options.eventCaptureLimit ?? 0;
   const input = [...(options.inputText ?? "")];
   let inputIndex = 0;
@@ -185,6 +210,8 @@ export const runMalbolge = (
   let d = 0;
   let steps = 0;
   let peakPosition = 0;
+  let writebacks = 0;
+  let representationChanges = 0;
   let status: MalbolgeRunStatus = "MAX_STEPS";
   let invalidReason: string | null = null;
   const outputBytes: number[] = [];
@@ -196,15 +223,31 @@ export const runMalbolge = (
     const opcode = instructionAt(cell, c);
     executed.add(c);
     if (c > peakPosition) peakPosition = c;
-    if (events.length < captureLimit)
-      events.push({
-        step: steps,
-        position: c,
-        opcode,
-        opcode_name: instructionName(opcode),
-        a,
-        d,
+    const capturing = events.length < captureLimit;
+    const snapshot = capturing
+      ? {
+          step: steps,
+          position: c,
+          opcode,
+          opcode_name: instructionName(opcode),
+          a,
+          d,
+        }
+      : null;
+    const stepWrites: MalbolgeWriteEvent[] = [];
+    const recordWrite = (
+      position: number,
+      valueBefore: number,
+      valueAfter: number,
+    ): void => {
+      writebacks += 1;
+      if (valueAfter !== valueBefore) representationChanges += 1;
+      stepWrites.push({
+        position,
+        value_before: valueBefore,
+        value_after: valueAfter,
       });
+    };
     let jumped = false;
     let jumpTarget = 0;
     if (opcode === 4) {
@@ -217,18 +260,23 @@ export const runMalbolge = (
       a = next === undefined ? -1 : next.charCodeAt(0);
       if (next !== undefined) inputIndex += 1;
     } else if (opcode === 39) {
-      const rotated = rotateRight(readCell(memory, d));
+      const before = readCell(memory, d);
+      const rotated = rotateRight(before);
       memory[d] = rotated;
       a = rotated;
+      recordWrite(d, before, rotated);
     } else if (opcode === 40) {
       d = readCell(memory, d);
     } else if (opcode === 62) {
-      const crazied = crazyOperation(a, readCell(memory, d));
+      const before = readCell(memory, d);
+      const crazied = crazyOperation(a, before);
       memory[d] = crazied;
       a = crazied;
+      recordWrite(d, before, crazied);
     } else if (opcode === 68) {
       // Canonical nop used by generated bootstrap blocks.
     } else if (opcode === 81) {
+      if (snapshot) events.push({ ...snapshot, writes: stepWrites });
       status = "HALTED";
       break;
     }
@@ -236,8 +284,12 @@ export const runMalbolge = (
     const currentCell = readCell(memory, c);
     if (currentCell >= 33 && currentCell <= 126) {
       const translated = ENCRYPTION[currentCell - 33];
-      if (translated !== undefined) memory[c] = translated;
+      if (translated !== undefined) {
+        memory[c] = translated;
+        recordWrite(c, currentCell, translated);
+      }
     }
+    if (snapshot) events.push({ ...snapshot, writes: stepWrites });
     c = (c + 1) % MALBOLGE_MEMORY_SIZE;
     d = (d + 1) % MALBOLGE_MEMORY_SIZE;
   }
@@ -252,6 +304,10 @@ export const runMalbolge = (
     events_truncated: steps > events.length,
     executed_positions: executed,
     peak_position: peakPosition,
+    writebacks,
+    representation_changes: representationChanges,
+    state_digest_before: digestBefore,
+    state_digest_after: digestMemory(memory),
   };
 };
 

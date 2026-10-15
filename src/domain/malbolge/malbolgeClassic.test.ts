@@ -10,6 +10,7 @@ import {
   runMalbolge,
 } from "./malbolgeClassic.js";
 import { HELLO_WORLD_SOURCE } from "../../../tests/fixtures/malbolgeHelloWorld.js";
+import { SELF_MODIFICATION_LOOP_SOURCE } from "../../../tests/fixtures/malbolgeSelfModificationLoop.js";
 
 describe("Malbolge classic engine", () => {
   it("reproduces the golden Hello, world. run (48 steps, HALTED)", () => {
@@ -100,5 +101,65 @@ describe("Malbolge classic engine", () => {
     if (!("family" in decompiled)) return;
     expect(decompiled.family).toBe("translator_bootstrap");
     expect(decompiled.bootstrap).toEqual({ jump_target: 100 });
+  });
+
+  it("registers the state transformation: digests and per-step writes", () => {
+    const run = runMalbolge(HELLO_WORLD_SOURCE, {
+      maxSteps: 1000,
+      eventCaptureLimit: 64,
+    });
+    expect(run.state_digest_before).toMatch(/^[a-f0-9]{64}$/u);
+    expect(run.state_digest_after).toMatch(/^[a-f0-9]{64}$/u);
+    expect(run.state_digest_before).not.toBe(run.state_digest_after);
+    expect(run.writebacks).toBe(71);
+    expect(run.representation_changes).toBe(71);
+    // Step 1 (movd at position 0) leaves the encrypted '(' behind: 40 -> 121.
+    expect(run.events[0]?.writes).toEqual([
+      { position: 0, value_before: 40, value_after: 121 },
+    ]);
+    // Step 2 (crazy at position 1) stores crazy(0, 93) == 29524 at position
+    // 41 and then encrypts the executed cell 61 -> 100.
+    expect(run.events[1]?.writes).toEqual([
+      { position: 41, value_before: 93, value_after: 29524 },
+      { position: 1, value_before: 61, value_after: 100 },
+    ]);
+    // Same source, same load: the before-digest is deterministic.
+    const repeat = runMalbolge(HELLO_WORLD_SOURCE, { maxSteps: 1000 });
+    expect(repeat.state_digest_before).toBe(run.state_digest_before);
+  });
+
+  it("reports explicit digests when the budget cuts the run short", () => {
+    const run = runMalbolge(HELLO_WORLD_SOURCE, { maxSteps: 10 });
+    expect(run.status).toBe("MAX_STEPS");
+    expect(run.state_digest_before).toMatch(/^[a-f0-9]{64}$/u);
+    expect(run.state_digest_after).toMatch(/^[a-f0-9]{64}$/u);
+    expect(run.state_digest_before).not.toBe(run.state_digest_after);
+  });
+
+  it("honors the mutated representation when a position is revisited", () => {
+    const run = runMalbolge(SELF_MODIFICATION_LOOP_SOURCE, {
+      maxSteps: 2000,
+      eventCaptureLimit: 2000,
+    });
+    expect(run.status).toBe("HALTED");
+    expect(run.steps).toBe(392);
+    expect(run.writebacks).toBe(137);
+    const visits = run.events.filter((event) => event.position === 29503);
+    expect(visits).toHaveLength(7);
+    // The cell is rewritten between visits, so each revisit decodes a
+    // different opcode — including an `in` on the fifth visit.
+    expect(visits.map((event) => event.opcode)).toEqual([
+      21, 15, 50, 30, 23, 25, 6,
+    ]);
+    expect(visits.map((event) => event.opcode_name)).toContain("in");
+  });
+
+  it("keeps INVALID runs free of invented state facts", () => {
+    const run = runMalbolge("D", { maxSteps: 10 });
+    expect(run.status).toBe("INVALID");
+    expect(run.writebacks).toBe(0);
+    expect(run.representation_changes).toBe(0);
+    expect(run.state_digest_before).toBeNull();
+    expect(run.state_digest_after).toBeNull();
   });
 });

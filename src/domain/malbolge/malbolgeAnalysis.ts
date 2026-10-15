@@ -101,6 +101,17 @@ const malbolgeStepEventSchema = z.strictObject({
   opcode_name: malbolgeOpcodeSchema,
   a: z.number().int(),
   d: z.number().int().nonnegative(),
+  writes: z
+    .array(
+      z.strictObject({
+        position: z.number().int().nonnegative(),
+        value_before: z.number().int(),
+        value_after: z.number().int(),
+      }),
+    )
+    .describe(
+      "Memory writes observed during this step: explicit rotate/crazy stores plus the post-instruction self-encryption",
+    ),
 });
 
 const malbolgeRunSchema = z.strictObject({
@@ -109,11 +120,35 @@ const malbolgeRunSchema = z.strictObject({
   invalid_reason: z.string().nullable(),
   events_truncated: z.boolean(),
   peak_position: z.number().int().nonnegative(),
+  writebacks: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe(
+      "Total memory writes during the run: rotate/crazy stores plus post-instruction encryptions",
+    ),
+  representation_changes: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe("Writes that actually altered the stored value"),
+  state_digest_before: digestSchema.describe(
+    "SHA-256 over the comma-joined 59049-word machine at load time",
+  ),
+  state_digest_after: digestSchema.describe(
+    "SHA-256 over the comma-joined 59049-word machine at the stop",
+  ),
 });
 
 /** Bounded in-process execution trace with the captured output text. */
 export const malbolgeTraceSchema = z.strictObject({
   artifact: malbolgeArtifactSchema,
+  execution_id: z
+    .string()
+    .uuid()
+    .describe(
+      "Identity of this traced execution: stable across every recorded transformation of the run",
+    ),
   run: malbolgeRunSchema,
   output_text: z.string(),
   output_bytes: z.array(z.number().int().min(0).max(255)),
