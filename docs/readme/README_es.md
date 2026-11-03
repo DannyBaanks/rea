@@ -22,7 +22,7 @@
 
 <a href="https://discord.com/invite/GkcryMnJDM"><img alt="Únete a la comunidad de REA en Discord" src="https://img.shields.io/badge/Join%20us%20on%20Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" height="40"></a>
 
-[Inicio rápido](#inicio-rápido) · [Cómo funciona REA](#cómo-funciona-rea) · [Qué puedes analizar](#qué-puedes-analizar) · [Casos prácticos](#casos-prácticos) · [Crear entornos de RL](#build-rl-environments) · [Preguntas frecuentes](#preguntas-frecuentes) · [Documentación](#documentación)
+[Inicio rápido](#inicio-rápido) · [Mejoras del fork](#mejoras-del-fork-edición-dannybaanks--isyco) · [Cómo funciona REA](#cómo-funciona-rea) · [Qué puedes analizar](#qué-puedes-analizar) · [Casos prácticos](#casos-prácticos) · [Crear entornos de RL](#build-rl-environments) · [Preguntas frecuentes](#preguntas-frecuentes) · [Documentación](#documentación)
 
 <code>npx rea-agents setup</code>
 
@@ -31,6 +31,21 @@
 > [!IMPORTANT]
 > Fuentes oficiales de REA: [morluto/rea](https://github.com/morluto/rea), [rea.tools](https://rea.tools/), [rea-agents](https://www.npmjs.com/package/rea-agents) (npm).
 > Usa los enlaces de instalación y de versiones publicados en estas fuentes oficiales. Un nombre de repositorio parecido o un README copiado no demuestra que una descarga sea oficial.
+
+> [!NOTE]
+> **Información de la versión base y mejoras del fork (DannyBaanks / ISyCo)**
+>
+> Este repositorio es un fork de desarrollo especializado mantenido por DannyBaanks y el grupo de investigación ISyCo (`https://github.com/DannyBaanks/rea`).
+>
+> - **Repositorio Upstream**: morluto/rea (https://github.com/morluto/rea)
+> - **Versión base oficial (Tag)**: `rea-agents-6.5.0` (`3b79af28e80785afce9f5998d8f03289402a1847`, 14 de octubre de 2026)
+> - **Upstream sincronizado**: Commit `fffb0741936067530d1ce9777461cd53e87398c2` (15 de octubre de 2026; incorpora 60 commits de verificación y correcciones de upstream)
+> - **Estado actual del fork**: `rea-agents-6.5.0-62-g6e01c226c` (62 commits por delante del tag 6.5.0)
+> - **Mejoras clave añadidas**:
+>   1. **Perfil de Catálogo Compacto MCP** (`REA_MCP_TOOL_PROFILE=compact`): Superficie de revelación progresiva que anuncia solo 3 meta-herramientas (`rea_discover`, `rea_describe`, `rea_execute`), reduciendo los esquemas anunciados de 3.48 MB (213 herramientas) a 7 KB (reducción del 99.8% en tokens) manteniendo el 100% de capacidades ejecutables.
+>   2. **Familia de Análisis de Malbolge Clásico**: Decodificación estática posicional (`inspect_malbolge`), trazado en proceso con límites (`trace_malbolge`) y proyección estructural de descompilación (`decompile_malbolge`).
+>   3. **Memoria Auto-Modificable Auditable y Huellas SHA-256**: Registro granular paso a paso de escrituras en memoria (`position`, `value_before`, `value_after`), identidad de ejecución UUID y resúmenes SHA-256 del vector de memoria de 59,049 palabras ternarias.
+>   4. **Protección DoS Fail-Closed (Límite de 8 MiB)**: `readSource` rechaza archivos fuente que excedan 8 MiB mediante `stat` antes de cargarlos en memoria RAM.
 
 <div align="center">
 
@@ -141,6 +156,91 @@ Revisa los cambios de configuración y reinicia tu agente. Para ejecutar comando
 
 Con Bun, usa `bunx rea-agents@latest` en lugar de `npx rea-agents@latest`.
 
+## Mejoras del fork: Edición DannyBaanks / ISyCo
+
+Este fork incorpora incorporaciones arquitectónicas críticas diseñadas para entornos de agentes con restricciones de contexto y análisis de programas esotéricos/auto-modificables.
+
+### 1. Perfil de catálogo compacto MCP (`REA_MCP_TOOL_PROFILE=compact`)
+
+En el repositorio oficial de REA, iniciar el servidor MCP publica de golpe las 213 herramientas disponibles, generando un esquema acumulado de **3.487.784 bytes (~3,48 MB)**. Para modelos o agentes con límites estrictos de contexto o cuotas de llamada a herramientas (como Claude Code, Cursor, Gemini CLI, Grok o Kimi), esta sobrecarga masiva produce truncamiento de instrucciones, costos elevados de tokens y alta latencia.
+
+El perfil compacto implementa una revelación progresiva de capacidades (_progressive disclosure_):
+
+- **Solo 3 herramientas publicadas en el catálogo inicial**:
+  - `rea_discover`: Busca herramientas por nombre, categoría (`kind`) o palabra clave, devolviendo resúmenes de máximo 160 caracteres.
+  - `rea_describe`: Resuelve y devuelve el esquema JSON y contrato completo de una herramienta específica bajo demanda.
+  - `rea_execute`: Valida y despacha la ejecución invocando la herramienta seleccionada con validación estricta de argumentos.
+- **Reducción masiva de tokens**: De 3.487.784 bytes (213 herramientas) a **7.065 bytes** (3 herramientas), lo que representa una **reducción del 99,8%** en la sobrecarga inicial del handshake MCP.
+- **Acceso total a capacidades**: Las 213 herramientas del repositorio oficial permanecen registradas, auditadas y ejecutables a través de `rea_execute`.
+
+Para activar el perfil compacto:
+
+```sh
+export REA_MCP_TOOL_PROFILE=compact
+```
+
+O en las variables de entorno de tu configuración de agente:
+
+```json
+{
+  "mcpServers": {
+    "rea": {
+      "command": "npx",
+      "args": ["-y", "rea-agents", "run-mcp-server"],
+      "env": {
+        "REA_MCP_TOOL_PROFILE": "compact"
+      }
+    }
+  }
+}
+```
+
+### 2. Suite de análisis e ingeniería inversa de Malbolge clásico
+
+Añade soporte nativo para inspeccionar y realizar ingeniería inversa sobre programas en Malbolge Clásico (máquina de 59.049 palabras ternarias de 10 trits), basado en un port bit-exacto en TypeScript del intérprete canónico de ISyCo:
+
+- `inspect_malbolge`: Decodificación posicional estática de celdas a opcodes (`(celda + posición) % 94`), mnemónicos (`jmp`, `out`, `in`, `rotate`, `movd`, `crazy`, `nop`, `halt`), métricas de espacios en blanco y distribución de opcodes sin ejecutar código.
+- `trace_malbolge`: Ejecución acotada en proceso de la máquina virtual devolviendo estados de registros paso a paso (`a`, `d`, puntero de instrucción, opcode), bytes de salida Latin-1 capturados, causas de parada o agotamiento de presupuesto de pasos, y mutaciones detalladas de memoria. Paridad bit-exacta con ISyCo (el "Hello, world." clásico se detiene exactamente en el paso 48).
+- `decompile_malbolge`: Proyección estructural para ingeniería inversa que identifica bootstraps de familias de traductores (salto inicial a bloque de nops), tramos de código ejecutado vs candidatos a datos y reconstrucción de cadenas de salida.
+
+Ejemplos de uso por CLI:
+
+```sh
+# Decodificación posicional estática
+npx rea-agents inspect_malbolge /ruta/al/programa.mal
+
+# Trazado de ejecución con presupuesto de pasos
+npx rea-agents trace_malbolge /ruta/al/programa.mal --max_steps 50000
+
+# Proyección estructural de descompilación
+npx rea-agents decompile_malbolge /ruta/al/programa.mal
+```
+
+### 3. Memoria auto-modificable auditable y huellas de estado criptográficas
+
+Los programas en Malbolge mutan continuamente su propia memoria y cifran cada instrucción tras ejecutarse. Este fork añade instrumentación forense profunda:
+
+- **Trazado de mutaciones paso a paso**: Cada evento en `trace_malbolge` registra las escrituras en memoria exactas (`position`, `value_before`, `value_after`), cubriendo operaciones explícitas (`rotate`, `crazy`) y el auto-cifrado intrínseco.
+- **Huellas de estado SHA-256**: Genera resúmenes SHA-256 de las 59.049 palabras de memoria al cargar (`state_digest_before`) y al terminar la ejecución (`state_digest_after`). Las ejecuciones inválidas reportan `null` para evitar alucinaciones.
+- **Identidad de ejecución única**: Cada ejecución genera un UUID (`execution_id`) que vincula todas las mutaciones a una sesión inmutable, independiente del hash del archivo fuente en disco.
+- **Contabilidad de mutaciones**: Cuantifica `writebacks` totales y `representation_changes` reales (escrituras que efectivamente alteraron el valor previo).
+
+### 4. Protección DoS Fail-Closed (Límite de 8 MiB)
+
+Para prevenir agotamiento de memoria del host ante volcados masivos o núcleos de extended-Malbolge (como el núcleo de 371 MB de malbolge-lisp), `readSource` comprueba el tamaño del archivo con `stat` antes de leerlo. Fuentes que superen los 8 MiB (`MAX_MALBOLGE_SOURCE_BYTES = 8 * 1024 * 1024`) son rechazadas de inmediato antes de consumir memoria RAM.
+
+### 5. Estado de sincronización y línea base
+
+| Propiedad                       | Valor                                                                          |
+| ------------------------------- | ------------------------------------------------------------------------------ |
+| Repositorio Upstream            | morluto/rea                                                                    |
+| Repositorio del Fork            | DannyBaanks/rea                                                                |
+| Tag base de Upstream            | rea-agents-6.5.0 (commit 3b79af28e80785afce9f5998d8f03289402a1847, 14-10-2026) |
+| Commit de Upstream sincronizado | fffb0741936067530d1ce9777461cd53e87398c2 (15-10-2026)                          |
+| Git Describe                    | rea-agents-6.5.0-62-g6e01c226c                                                 |
+| Commits por delante del tag     | 62 en total (60 fixes post-6.5.0 de upstream + 2 suites del fork)              |
+| Rama activa del Fork            | main (rastreando privado/main)                                                 |
+
 ## Cómo funciona REA
 
 Tu agente llama a REA mediante MCP para inspeccionar el objetivo y seguir el código relevante. REA devuelve los hallazgos junto con sus pruebas. El agente los utiliza para hacer preguntas de seguimiento, explicar el comportamiento o escribir y probar una implementación. Los comandos de CLI usan los mismos flujos de trabajo.
@@ -178,6 +278,7 @@ REA requiere Node.js 22.x (>=22.23.4), 24.x (>=24.22.1) o 26+ (>=26.12.1), adem�
 | Ensamblados .NET            | Metadatos, instrucciones CIL, dependencias nativas declaradas y comparaciones de compilaciones                                 | Inspección estática; [guía de código administrado](../guides/managed/managed-code-analysis.md)                                                                        |
 | PyInstaller                 | CArchive, PYZ, Python bytecode                                                                                                 | Static inspection; [Python packaged applications](../python-packaged-applications.md)                                                                                 |
 | Deno compile binaries       | Virtual files, entry point, recorded options, npm snapshot length                                                              | Static inspection; [Deno compile executables](../deno-standalone.md)                                                                                                  |
+| Programas Malbolge          | Decodificación posicional, auditoría de escrituras en memoria, salida Latin-1, huellas de estado, análisis de bootstrap        | Motor canónico ISyCo integrado; límite de 8 MiB; `inspect_malbolge`, `trace_malbolge`, `decompile_malbolge`                                                           |
 | APK de Android              | Declaraciones del manifiesto, clases, métodos descompilados y referencias                                                      | JADX sin interfaz gráfica y un JDK completo en Linux/macOS/Windows x64; [guía de Android](../guides/android/android-analysis.md)                                      |
 | Dispositivos Android        | Dispositivos, paquetes, procesos, registros, volcados, capturas de pantalla y transferencias de APK/archivos                   | adb suministrado por el autor de la llamada (emulador o dispositivo); [guía de ADB](../guides/android/adb-device-analysis.md)                                         |
 | Proyectos JEB               | Unidades de proyecto del motor, resúmenes de artefactos y pseudocódigo de tipos/métodos                                        | Un cliente JEB iniciado por el autor de la llamada que sirve MCP, seleccionado con REA_JEB_MCP_URL; [guía de JEB](../providers/jeb-analysis.md)                       |
