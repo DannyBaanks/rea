@@ -167,6 +167,56 @@ use `npx rea-agents@latest` followed by the command. With Bun, use
 
 This fork incorporates critical architectural additions tailored for token-constrained agent environments and esoteric binary/self-modifying program analysis.
 
+### Installation from this repository
+
+> [!WARNING]
+> Running `npx rea-agents setup` or `npm install -g rea-agents` installs the **official upstream distribution** from npm, which does **not** include this fork's features (such as the Malbolge analysis engine or the compact catalog profile).
+> To use the enhancements in this fork, clone this repository and run from source or link it locally.
+
+#### 1. Clone and compile the fork
+
+```sh
+git clone https://github.com/DannyBaanks/rea.git
+cd rea
+npm install
+npm run compile
+```
+
+#### 2. Configure your agent to use this fork
+
+Add this local repository build as an MCP server in your agent's MCP configuration (e.g., Claude Code, Cursor, Gemini CLI, Windsurf).
+
+**Claude Code CLI:**
+
+```sh
+claude mcp add rea -- node /absolute/path/to/rea/scripts/rea.mjs mcp
+```
+
+**Agent MCP configuration (with compact profile enabled):**
+
+```json
+{
+  "mcpServers": {
+    "rea": {
+      "command": "node",
+      "args": ["/absolute/path/to/rea/scripts/rea.mjs", "mcp"],
+      "env": {
+        "REA_MCP_TOOL_PROFILE": "compact"
+      }
+    }
+  }
+}
+```
+
+#### 3. (Optional) Link the CLI locally
+
+To use the `rea` CLI command with this fork across your system:
+
+```sh
+npm link
+rea --help
+```
+
 ### 1. Compact MCP catalog profile (`REA_MCP_TOOL_PROFILE=compact`)
 
 In standard upstream REA, starting the MCP server advertises all 213 tools immediately, generating a schema payload of **3,487,784 bytes (~3.48 MB)**. For agents with strict tool-call constraints or context-window limits (such as Claude Code, Cursor, Gemini CLI, Grok, or Kimi), this large tool payload leads to truncated system instructions, high context costs, and high latency.
@@ -192,8 +242,8 @@ Or in your agent configuration's environment variables:
 {
   "mcpServers": {
     "rea": {
-      "command": "npx",
-      "args": ["-y", "rea-agents", "run-mcp-server"],
+      "command": "node",
+      "args": ["/absolute/path/to/rea/scripts/rea.mjs", "mcp"],
       "env": {
         "REA_MCP_TOOL_PROFILE": "compact"
       }
