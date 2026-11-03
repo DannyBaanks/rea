@@ -160,6 +160,56 @@ Con Bun, usa `bunx rea-agents@latest` en lugar de `npx rea-agents@latest`.
 
 Este fork incorpora incorporaciones arquitectónicas críticas diseñadas para entornos de agentes con restricciones de contexto y análisis de programas esotéricos/auto-modificables.
 
+### Instalación desde este repositorio
+
+> [!WARNING]
+> Ejecutar `npx rea-agents setup` o `npm install -g rea-agents` instala la **distribución oficial de upstream** desde npm, la cual **no** incluye las funciones de este fork (como el motor de análisis de Malbolge o el perfil de catálogo compacto).
+> Para probar y utilizar las mejoras de este fork, clona este repositorio y ejecútalo desde el código fuente o enlázalo localmente.
+
+#### 1. Clonar y compilar el fork
+
+```sh
+git clone https://github.com/DannyBaanks/rea.git
+cd rea
+npm install
+npm run compile
+```
+
+#### 2. Configurar tu agente para usar este fork
+
+Añade esta compilación local como servidor MCP en la configuración de tu agente (ej. Claude Code, Cursor, Gemini CLI, Windsurf).
+
+**CLI de Claude Code:**
+
+```sh
+claude mcp add rea -- node /ruta/absoluta/a/rea/scripts/rea.mjs mcp
+```
+
+**Configuración JSON del agente (con perfil compacto activo):**
+
+```json
+{
+  "mcpServers": {
+    "rea": {
+      "command": "node",
+      "args": ["/ruta/absoluta/a/rea/scripts/rea.mjs", "mcp"],
+      "env": {
+        "REA_MCP_TOOL_PROFILE": "compact"
+      }
+    }
+  }
+}
+```
+
+#### 3. (Opcional) Enlazar el CLI globalmente
+
+Para usar el comando `rea` de este fork en tu terminal:
+
+```sh
+npm link
+rea --help
+```
+
 ### 1. Perfil de catálogo compacto MCP (`REA_MCP_TOOL_PROFILE=compact`)
 
 En el repositorio oficial de REA, iniciar el servidor MCP publica de golpe las 213 herramientas disponibles, generando un esquema acumulado de **3.487.784 bytes (~3,48 MB)**. Para modelos o agentes con límites estrictos de contexto o cuotas de llamada a herramientas (como Claude Code, Cursor, Gemini CLI, Grok o Kimi), esta sobrecarga masiva produce truncamiento de instrucciones, costos elevados de tokens y alta latencia.
@@ -185,8 +235,8 @@ O en las variables de entorno de tu configuración de agente:
 {
   "mcpServers": {
     "rea": {
-      "command": "npx",
-      "args": ["-y", "rea-agents", "run-mcp-server"],
+      "command": "node",
+      "args": ["/ruta/absoluta/a/rea/scripts/rea.mjs", "mcp"],
       "env": {
         "REA_MCP_TOOL_PROFILE": "compact"
       }
