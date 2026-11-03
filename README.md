@@ -20,7 +20,7 @@
 
 **[Website](https://rea.tools/) · [Guides](https://rea.tools/guides/) · [Showcases](https://rea.tools/showcase/)**
 
-[Quick start](#quick-start) · [How REA works](#how-rea-works) · [What you can analyze](#what-you-can-analyze) · [Showcases](#showcases) · [FAQ](#faq) · [Documentation](#documentation)
+[Quick start](#quick-start) · [Fork enhancements](#fork-enhancements-dannybaanks--isyco-edition) · [How REA works](#how-rea-works) · [What you can analyze](#what-you-can-analyze) · [Showcases](#showcases) · [FAQ](#faq) · [Documentation](#documentation)
 
 <code>npx rea-agents setup</code>
 
@@ -31,6 +31,21 @@
 > [rea.tools](https://rea.tools/), or the [rea-agents npm package](https://www.npmjs.com/package/rea-agents).
 > Follow the installation and release links from these official sources. A similar
 > repository name or copied README does not establish that a download is official.
+
+> [!NOTE]
+> **Fork Baseline & Divergence Information (DannyBaanks / ISyCo)**
+>
+> This repository is a specialized development fork maintained by DannyBaanks and the ISyCo research group (`https://github.com/DannyBaanks/rea`).
+>
+> - **Upstream Repository**: morluto/rea (https://github.com/morluto/rea)
+> - **Base Release Tag**: `rea-agents-6.5.0` (`3b79af28e80785afce9f5998d8f03289402a1847`, released Oct 14, 2026)
+> - **Upstream Synchronized**: Commit `fffb0741936067530d1ce9777461cd53e87398c2` (Oct 15, 2026; incorporates 60 upstream post-6.5.0 stability & verification fixes)
+> - **Current Fork State**: `rea-agents-6.5.0-62-g6e01c226c` (62 commits ahead of the 6.5.0 tag)
+> - **Key Improvements**:
+>   1. **Compact MCP Catalog Profile** (`REA_MCP_TOOL_PROFILE=compact`): Progressive disclosure surface advertising only 3 meta-tools (`rea_discover`, `rea_describe`, `rea_execute`), reducing advertised schemas from 3.48 MB (213 tools) down to 7 KB (99.8% token reduction) while maintaining full tool access.
+>   2. **Classic Malbolge Analysis Family**: Complete static decoding (`inspect_malbolge`), bounded in-process tracing (`trace_malbolge`), and structural decompilation projection (`decompile_malbolge`).
+>   3. **Auditable Self-Modifying Memory & SHA-256 State Digests**: Step-by-step writeback logging (`position`, `value_before`, `value_after`), UUID execution tracking, and deterministic 59,049-word ternary memory digests.
+>   4. **Fail-Closed 8 MiB DoS Protection**: `readSource` denies oversized sources via `stat` before loading into host RAM.
 
 <div align="center">
 
@@ -148,6 +163,91 @@ Review the setup changes and restart your agent. For one-off CLI commands,
 use `npx rea-agents@latest` followed by the command. With Bun, use
 `bunx rea-agents@latest` in place of `npx rea-agents@latest`.
 
+## Fork enhancements: DannyBaanks / ISyCo edition
+
+This fork incorporates critical architectural additions tailored for token-constrained agent environments and esoteric binary/self-modifying program analysis.
+
+### 1. Compact MCP catalog profile (`REA_MCP_TOOL_PROFILE=compact`)
+
+In standard upstream REA, starting the MCP server advertises all 213 tools immediately, generating a schema payload of **3,487,784 bytes (~3.48 MB)**. For agents with strict tool-call constraints or context-window limits (such as Claude Code, Cursor, Gemini CLI, Grok, or Kimi), this large tool payload leads to truncated system instructions, high context costs, and high latency.
+
+The compact profile implements progressive capability disclosure:
+
+- **Only 3 tools advertised**:
+  - `rea_discover`: Query tools by name, category (`kind`), or keyword, returning capped 160-character summaries.
+  - `rea_describe`: Resolves and returns the full schema and contract for a specific tool on demand.
+  - `rea_execute`: Dispatches tool invocation, validating arguments strictly against the target schema and enforcing admission controls.
+- **Payload reduction**: From 3,487,784 bytes (213 tools) to **7,065 bytes** (3 tools) — a **99.8% reduction in token overhead**.
+- **Full capability access**: All 213 upstream tools remain fully registered, admitted, and callable through `rea_execute`.
+
+To activate the compact profile:
+
+```sh
+export REA_MCP_TOOL_PROFILE=compact
+```
+
+Or in your agent configuration's environment variables:
+
+```json
+{
+  "mcpServers": {
+    "rea": {
+      "command": "npx",
+      "args": ["-y", "rea-agents", "run-mcp-server"],
+      "env": {
+        "REA_MCP_TOOL_PROFILE": "compact"
+      }
+    }
+  }
+}
+```
+
+### 2. Classic Malbolge analysis & reverse engineering suite
+
+Adds native support for analyzing and reverse-engineering programs written in Classic Malbolge (59,049 ten-trit memory machine), using a bit-exact TypeScript port of the canonical ISyCo interpreter:
+
+- `inspect_malbolge`: Static positional decode of source cells into opcodes (`(cell + position) % 94`), mnemonics (`jmp`, `out`, `in`, `rotate`, `movd`, `crazy`, `nop`, `halt`), whitespace tracking, and opcode distribution statistics without executing any code.
+- `trace_malbolge`: Bounded in-process virtual machine execution returning step-by-step register states (`a`, `d`, code pointer, opcode), captured Latin-1 output bytes, explicit halt/budget exhaustion facts, and detailed memory mutations. Bit-exact parity with canonical ISyCo runs (e.g., standard "Hello, world." halts at step 48).
+- `decompile_malbolge`: Structural reverse-engineering projection identifying translator-family bootstraps (initial jump to nop blocks), executed instruction spans vs data candidate spans, and reconstructed output strings.
+
+CLI usage examples:
+
+```sh
+# Decode source structure statically
+npx rea-agents inspect_malbolge /path/to/program.mal
+
+# Trace execution with bounded step budget
+npx rea-agents trace_malbolge /path/to/program.mal --max_steps 50000
+
+# Structural decompilation projection
+npx rea-agents decompile_malbolge /path/to/program.mal
+```
+
+### 3. Auditable self-modifying memory & cryptographic state digests
+
+Malbolge programs mutate their own memory space and encrypt instructions after execution. This fork adds forensic instrumentation:
+
+- **Write-by-write mutation tracing**: Every step event in `trace_malbolge` records each memory write (`position`, `value_before`, `value_after`), covering both explicit stores (`rotate`, `crazy`) and post-instruction self-encryption.
+- **Cryptographic state digests**: Computes SHA-256 digests over the comma-joined 59,049-word memory space at load time (`state_digest_before`) and termination (`state_digest_after`). Invalid runs return `null` rather than falsifying state facts.
+- **Execution identity**: Every traced run receives a unique UUID (`execution_id`) linking all mutation events to a single immutable execution session, separate from the source file's SHA-256 artifact digest.
+- **Mutation accounting**: Tracks total `writebacks` and actual `representation_changes` (writes that genuinely altered cell values).
+
+### 4. Fail-closed DoS protection (8 MiB source cap)
+
+To prevent memory exhaustion and denial-of-service from massive memory dumps or extended-Malbolge cores (such as the 371 MB malbolge-lisp core), `readSource` checks file size via `stat` before reading. Files exceeding `MAX_MALBOLGE_SOURCE_BYTES = 8 * 1024 * 1024` (8 MiB) are rejected immediately before touching host RAM.
+
+### 5. Upstream baseline & divergence state
+
+| Property                     | Value                                                                          |
+| ---------------------------- | ------------------------------------------------------------------------------ |
+| Upstream Repository          | morluto/rea                                                                    |
+| Fork Repository              | DannyBaanks/rea                                                                |
+| Base Upstream Tag            | rea-agents-6.5.0 (commit 3b79af28e80785afce9f5998d8f03289402a1847, 2026-10-14) |
+| Synchronized Upstream Commit | fffb0741936067530d1ce9777461cd53e87398c2 (2026-10-15)                          |
+| Git Describe                 | rea-agents-6.5.0-62-g6e01c226c                                                 |
+| Commits Ahead of Tag         | 62 total (60 upstream post-6.5.0 fixes + 2 fork feature suites)                |
+| Active Fork Branch           | main (tracking privado/main)                                                   |
+
 ## How REA works
 
 Your agent calls REA through MCP to inspect the target and trace relevant code.
@@ -166,31 +266,32 @@ CLI commands use the same workflows.
 REA requires Node.js 22.x (>=22.19), 24.x (>=24.11), or 26+, plus npm.
 Additional tools and host support depend on the target:
 
-| Target                 | What REA returns                                                                     | Requirements and guide                                                                                                                |
-| ---------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Native binaries        | Pseudocode, assembly, strings, symbols, calls and references                         | Hopper, Ghidra or IDA; [native analysis](docs/native-investigation.md)                                                                |
-| Offline ELF layout     | Sections, segments, original symbols/relocations and static mitigation candidates    | Caller-supplied pwntools on Linux x64; [binary diagnostics](docs/binary-diagnostics.md)                                               |
-| Go binaries            | Embedded compiler version, modules, replacements and build settings                  | Built-in static ELF/PE/thin Mach-O inspection; no Go installation required                                                            |
-| Rust binaries          | Embedded cargo-auditable crate names, versions, sources and dependency edges         | Built-in static ELF/PE/thin Mach-O inspection; [Rust binaries](docs/rust-binaries.md)                                                 |
-| WASM artifact          | Validation, sections, exact import/export WAT forms and decoded WAT                  | Caller-supplied WABT 1.0.42; `inspect_wasm_artifact`                                                                                  |
-| EVM bytecode           | Dispatch selectors, byte offsets, inferred arguments and mutability                  | Local raw/hex carrier on Linux x64; [offline EVM guide](docs/evm-bytecode.md)                                                         |
-| SQLite databases       | Tables, columns, indexes, views, triggers and selected ordinary-table rows           | Local database/WAL snapshot; Node.js 24.x >=24.15 or 26+ with native SQLite limits                                                    |
-| Recorded Linux crashes | Raw notes, every recorded thread's registers/signals and optional mapping candidates | Caller-supplied pwntools on Linux x64; optional GDB/pwndbg; [recorded crashes](docs/recorded-crashes.md)                              |
-| JavaScript / Electron  | Modules, imports, source maps, routes, IPC and native add-on relationships           | Node.js and npm; Linux: procps-compatible `ps`; [application analysis](docs/javascript-application-workflows.md)                      |
-| Websites               | Page structure, scripts, network observations and requested screenshots              | A Chrome-family browser; [browser analysis](docs/browser-observation.md)                                                              |
-| Saved network captures | Requests, responses, exposed payloads and source locations                           | HAR or Fiddler Everywhere SAZ; mitmdump on Linux for native mitmproxy; [capture guide](docs/web-network-captures.md)                  |
-| .NET assemblies        | Metadata, CIL instructions, declared native dependencies and build comparisons       | None (static only); [managed-code guide](docs/managed-code-analysis.md)                                                               |
-| Android APKs           | Manifest declarations, classes, decompiled methods and references                    | Headless JADX and a full JDK on Linux/macOS/Windows x64; [Android guide](docs/android-analysis.md)                                    |
-| Android devices        | Devices, packages, processes, logs, dumps, screen captures, and APK/file transfers   | Caller-supplied adb (emulator or hardware); [ADB guide](docs/adb-device-analysis.md)                                                  |
-| JEB projects           | Engine-backed project units, artifact digests and type/method pseudo-code            | A caller-started JEB client serving MCP, selected with REA_JEB_MCP_URL; [JEB guide](docs/jeb-analysis.md)                             |
-| Android resources      | Decoded manifest, string tables, locales and version facts                           | Caller-supplied Apktool launcher; [resource guide](docs/apktool-resource-analysis.md)                                                 |
-| Flutter apps           | Dart snapshot hash, per-ABI library digests and engine build provenance              | None (static APK parsing); [Flutter guide](docs/flutter-analysis.md)                                                                  |
-| Firmware               | Regions, extraction results and native-analysis handoffs                             | Binwalk / Unblob on Linux; [firmware guide](docs/firmware-analysis.md)                                                                |
-| Recorded packets       | Selected fields, repeated values, filters and decode-as rules                        | Linux: TShark 4.x + prlimit; [capture guide](docs/packet-captures.md)                                                                 |
-| Packet summaries       | Endpoints, DNS, TLS SNI, protocol distribution and HTTP requests                     | Caller-supplied tshark and capinfos (Linux-verified); [pcap guide](docs/pcap-analysis.md)                                             |
-| Recorded logic signals | Decoder annotations, sample ranges and diagnostics                                   | Linux: sigrok-cli 0.7.2 + prlimit; [signal recordings](docs/signal-recordings.md)                                                     |
-| Packages and resources | File inventories, digests, plists, Apple bundle anatomy and extracted resources      | [Artifact and JavaScript guide](docs/javascript-artifact-reconstruction.md), [Apple applications](docs/apple-application-analysis.md) |
-| Process behavior       | Terminal output, interactions, exit and filesystem observations, and run comparisons | Linux/macOS with a native PTY; [process capture](docs/process-capture.md)                                                             |
+| Target                 | What REA returns                                                                                         | Requirements and guide                                                                                                                |
+| ---------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Native binaries        | Pseudocode, assembly, strings, symbols, calls and references                                             | Hopper, Ghidra or IDA; [native analysis](docs/native-investigation.md)                                                                |
+| Offline ELF layout     | Sections, segments, original symbols/relocations and static mitigation candidates                        | Caller-supplied pwntools on Linux x64; [binary diagnostics](docs/binary-diagnostics.md)                                               |
+| Go binaries            | Embedded compiler version, modules, replacements and build settings                                      | Built-in static ELF/PE/thin Mach-O inspection; no Go installation required                                                            |
+| Rust binaries          | Embedded cargo-auditable crate names, versions, sources and dependency edges                             | Built-in static ELF/PE/thin Mach-O inspection; [Rust binaries](docs/rust-binaries.md)                                                 |
+| WASM artifact          | Validation, sections, exact import/export WAT forms and decoded WAT                                      | Caller-supplied WABT 1.0.42; `inspect_wasm_artifact`                                                                                  |
+| EVM bytecode           | Dispatch selectors, byte offsets, inferred arguments and mutability                                      | Local raw/hex carrier on Linux x64; [offline EVM guide](docs/evm-bytecode.md)                                                         |
+| SQLite databases       | Tables, columns, indexes, views, triggers and selected ordinary-table rows                               | Local database/WAL snapshot; Node.js 24.x >=24.15 or 26+ with native SQLite limits                                                    |
+| Recorded Linux crashes | Raw notes, every recorded thread's registers/signals and optional mapping candidates                     | Caller-supplied pwntools on Linux x64; optional GDB/pwndbg; [recorded crashes](docs/recorded-crashes.md)                              |
+| JavaScript / Electron  | Modules, imports, source maps, routes, IPC and native add-on relationships                               | Node.js and npm; Linux: procps-compatible `ps`; [application analysis](docs/javascript-application-workflows.md)                      |
+| Websites               | Page structure, scripts, network observations and requested screenshots                                  | A Chrome-family browser; [browser analysis](docs/browser-observation.md)                                                              |
+| Saved network captures | Requests, responses, exposed payloads and source locations                                               | HAR or Fiddler Everywhere SAZ; mitmdump on Linux for native mitmproxy; [capture guide](docs/web-network-captures.md)                  |
+| .NET assemblies        | Metadata, CIL instructions, declared native dependencies and build comparisons                           | None (static only); [managed-code guide](docs/managed-code-analysis.md)                                                               |
+| Android APKs           | Manifest declarations, classes, decompiled methods and references                                        | Headless JADX and a full JDK on Linux/macOS/Windows x64; [Android guide](docs/android-analysis.md)                                    |
+| Android devices        | Devices, packages, processes, logs, dumps, screen captures, and APK/file transfers                       | Caller-supplied adb (emulator or hardware); [ADB guide](docs/adb-device-analysis.md)                                                  |
+| JEB projects           | Engine-backed project units, artifact digests and type/method pseudo-code                                | A caller-started JEB client serving MCP, selected with REA_JEB_MCP_URL; [JEB guide](docs/jeb-analysis.md)                             |
+| Android resources      | Decoded manifest, string tables, locales and version facts                                               | Caller-supplied Apktool launcher; [resource guide](docs/apktool-resource-analysis.md)                                                 |
+| Flutter apps           | Dart snapshot hash, per-ABI library digests and engine build provenance                                  | None (static APK parsing); [Flutter guide](docs/flutter-analysis.md)                                                                  |
+| Firmware               | Regions, extraction results and native-analysis handoffs                                                 | Binwalk / Unblob on Linux; [firmware guide](docs/firmware-analysis.md)                                                                |
+| Recorded packets       | Selected fields, repeated values, filters and decode-as rules                                            | Linux: TShark 4.x + prlimit; [capture guide](docs/packet-captures.md)                                                                 |
+| Packet summaries       | Endpoints, DNS, TLS SNI, protocol distribution and HTTP requests                                         | Caller-supplied tshark and capinfos (Linux-verified); [pcap guide](docs/pcap-analysis.md)                                             |
+| Recorded logic signals | Decoder annotations, sample ranges and diagnostics                                                       | Linux: sigrok-cli 0.7.2 + prlimit; [signal recordings](docs/signal-recordings.md)                                                     |
+| Packages and resources | File inventories, digests, plists, Apple bundle anatomy and extracted resources                          | [Artifact and JavaScript guide](docs/javascript-artifact-reconstruction.md), [Apple applications](docs/apple-application-analysis.md) |
+| Process behavior       | Terminal output, interactions, exit and filesystem observations, and run comparisons                     | Linux/macOS with a native PTY; [process capture](docs/process-capture.md)                                                             |
+| Malbolge programs      | Positional instruction decode, memory writeback audit, Latin-1 output, state digests, bootstrap analysis | Built-in canonical ISyCo engine; bounded 8 MiB source cap; `inspect_malbolge`, `trace_malbolge`, `decompile_malbolge`                 |
 
 Static JavaScript and .NET inspection read the supplied files without running
 the application. Runtime capture runs or interacts with the selected target
