@@ -83,6 +83,12 @@ export const traceMalbolgeInputSchema = z.strictObject({
     .max(4096)
     .optional()
     .describe("Optional input consumed by `in` instructions in order"),
+  eof_mode: z
+    .enum(["legacy_minus_one", "olmstead_1998"])
+    .default("legacy_minus_one")
+    .describe(
+      "Value returned by exhausted input: -1 in the legacy port, or 59048 in Olmstead 1998",
+    ),
   event_capture_limit: z
     .number()
     .int()

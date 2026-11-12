@@ -136,6 +136,8 @@ export interface MalbolgeRunOptions {
   readonly maxSteps: number;
   readonly inputText?: string;
   readonly eventCaptureLimit?: number;
+  /** Select the EOF value; legacy preserves the original Python port. */
+  readonly eofMode?: "legacy_minus_one" | "olmstead_1998";
 }
 
 /**
@@ -254,10 +256,15 @@ export const runMalbolge = (
       jumpTarget = readCell(memory, d);
       jumped = true;
     } else if (opcode === 5) {
-      outputBytes.push(a % 256);
+      outputBytes.push(((a % 256) + 256) % 256);
     } else if (opcode === 23) {
       const next = inputIndex < input.length ? input[inputIndex] : undefined;
-      a = next === undefined ? -1 : next.charCodeAt(0);
+      a =
+        next === undefined
+          ? options.eofMode === "olmstead_1998"
+            ? MALBOLGE_MEMORY_SIZE - 1
+            : -1
+          : next.charCodeAt(0);
       if (next !== undefined) inputIndex += 1;
     } else if (opcode === 39) {
       const before = readCell(memory, d);

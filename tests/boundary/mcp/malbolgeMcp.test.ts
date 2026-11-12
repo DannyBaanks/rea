@@ -56,6 +56,59 @@ const normalizedResult = (result: CallToolResult): Record<string, unknown> =>
     "normalized_result"
   ] as Record<string, unknown>;
 
+describe("Malbolge MCP EOF conventions", () => {
+  it.runIf(Boolean(process.env["REA_MALBOLGE_EOF_FIXTURE"]))(
+    "traces a real binary cat through the Olmstead EOF path",
+    async () => {
+      const input = "\u0000\u0080\u00ff";
+      const result = await callTool("trace_malbolge", {
+        path: process.env["REA_MALBOLGE_EOF_FIXTURE"],
+        input_text: input,
+        eof_mode: "olmstead_1998",
+        max_steps: 20000,
+        event_capture_limit: 0,
+      });
+      expect(result.isError).not.toBe(true);
+      const value = normalizedResult(result);
+      expect(value["output_bytes"]).toEqual([0, 128, 255]);
+      expect((value["run"] as Record<string, unknown>)["status"]).toBe(
+        "HALTED",
+      );
+      expect(
+        (
+          (result.structuredContent as Record<string, unknown>)[
+            "parameters"
+          ] as Record<string, unknown>
+        )["eof_mode"],
+      ).toBe("olmstead_1998");
+    },
+  );
+  it("exposes the selected EOF semantics and preserves them in Evidence", async () => {
+    const path = await writeProgram("eof.mal", "ubO");
+    const historical = await callTool("trace_malbolge", {
+      path,
+      eof_mode: "olmstead_1998",
+      max_steps: 4,
+    });
+    expect(historical.isError).not.toBe(true);
+    expect(normalizedResult(historical)["output_bytes"]).toEqual([168]);
+    const evidence = historical.structuredContent as Record<string, unknown>;
+    expect(
+      (evidence["parameters"] as Record<string, unknown>)["eof_mode"],
+    ).toBe("olmstead_1998");
+    const legacy = await callTool("trace_malbolge", { path, max_steps: 4 });
+    expect(legacy.isError).not.toBe(true);
+    expect(normalizedResult(legacy)["output_bytes"]).toEqual([255]);
+    expect(
+      (
+        (legacy.structuredContent as Record<string, unknown>)[
+          "parameters"
+        ] as Record<string, unknown>
+      )["eof_mode"],
+    ).toBe("legacy_minus_one");
+  });
+});
+
 describe("Malbolge MCP boundary", () => {
   it("A. registers the three Malbolge contracts from the canonical catalog", async () => {
     const server = buildServer();
