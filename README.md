@@ -260,6 +260,8 @@ Adds native support for analyzing and reverse-engineering programs written in Cl
 - `trace_malbolge`: Bounded in-process virtual machine execution returning step-by-step register states (`a`, `d`, code pointer, opcode), captured Latin-1 output bytes, explicit halt/budget exhaustion facts, and detailed memory mutations. Bit-exact parity with canonical ISyCo runs (e.g., standard "Hello, world." halts at step 48).
 - `decompile_malbolge`: Structural reverse-engineering projection identifying translator-family bootstraps (initial jump to nop blocks), executed instruction spans vs data candidate spans, and reconstructed output strings.
 
+For `trace_malbolge`, set `eof_mode` to `olmstead_1998` to model exhausted input as the ten-trit value 59048. The default, `legacy_minus_one`, preserves the ISyCo port's existing EOF convention. The selected mode is recorded in Evidence; the two modes can produce different control flow and output after EOF.
+
 CLI usage examples:
 
 ```sh
