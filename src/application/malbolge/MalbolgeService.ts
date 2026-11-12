@@ -245,6 +245,7 @@ export class MalbolgeService {
         ? {}
         : { inputText: input.data.input_text }),
       eventCaptureLimit: input.data.event_capture_limit,
+      eofMode: input.data.eof_mode,
     });
     if (run.status === "INVALID")
       return err(
@@ -285,6 +286,7 @@ export class MalbolgeService {
         writes: event.writes.map((write) => ({ ...write })),
       })),
       limitations: [
+        `Exhausted input uses EOF mode ${input.data.eof_mode}; different EOF conventions can change control flow and output.`,
         "The trace replays Classic Malbolge semantics in a bounded in-process engine; memory past the program is the canonical crazy chain, never the host.",
         "Output text is decoded as latin-1 bytes, exactly as the canonical interpreter reports it.",
         "Each step records its memory writes (rotate/crazy stores plus the post-instruction self-encryption) with before and after values; state digests are SHA-256 over the comma-joined 59049-word machine at load time and at the reported stop.",
@@ -308,6 +310,7 @@ export class MalbolgeService {
               ? {}
               : { input_text: input.data.input_text }),
             event_capture_limit: input.data.event_capture_limit,
+            eof_mode: input.data.eof_mode,
           },
           result: value,
           confidence: "observed",

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 
 import {
   crazyOperation,
@@ -11,6 +12,54 @@ import {
 } from "./malbolgeClassic.js";
 import { HELLO_WORLD_SOURCE } from "../../../tests/fixtures/malbolgeHelloWorld.js";
 import { SELF_MODIFICATION_LOOP_SOURCE } from "../../../tests/fixtures/malbolgeSelfModificationLoop.js";
+
+describe("Malbolge EOF conventions", () => {
+  it.runIf(Boolean(process.env["REA_MALBOLGE_EOF_FIXTURE"]))(
+    "replays an external binary cat through its own EOF halt",
+    () => {
+      const source = readFileSync(
+        process.env["REA_MALBOLGE_EOF_FIXTURE"]!,
+        "utf8",
+      );
+      for (const inputText of [
+        "",
+        "\0",
+        "A",
+        "\0\x80\xff",
+        String.fromCharCode(...Array.from({ length: 256 }, (_, i) => i)),
+      ]) {
+        const run = runMalbolge(source, {
+          inputText,
+          maxSteps: 200000,
+          eofMode: "olmstead_1998",
+        });
+        expect(run.status).toBe("HALTED");
+        expect(run.output_bytes).toEqual(
+          [...inputText].map((c) => c.charCodeAt(0)),
+        );
+      }
+    },
+  );
+  it("selects the exhausted-input convention and emits a byte for EOF", () => {
+    // IN; OUT; HALT, each encoded at its own position.
+    const source = "ubO";
+    const legacy = runMalbolge(source, { maxSteps: 4 });
+    const olmstead = runMalbolge(source, {
+      maxSteps: 4,
+      eofMode: "olmstead_1998",
+    });
+    expect(legacy.status).toBe("HALTED");
+    expect(legacy.output_bytes).toEqual([255]);
+    expect(olmstead.status).toBe("HALTED");
+    expect(olmstead.output_bytes).toEqual([168]);
+    const byte = runMalbolge(source, {
+      maxSteps: 4,
+      inputText: "\u0000",
+      eofMode: "olmstead_1998",
+    });
+    expect(byte.output_bytes).toEqual([0]);
+  });
+});
 
 describe("Malbolge classic engine", () => {
   it("reproduces the golden Hello, world. run (48 steps, HALTED)", () => {
