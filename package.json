@@ -35,7 +35,8 @@
   },
   "type": "module",
   "imports": {
-    "#javascript-analysis-worker": "./dist/composition/javascriptAnalysisWorkerProcess.js"
+    "#javascript-analysis-worker": "./dist/composition/javascriptAnalysisWorkerProcess.js",
+    "#artifact-inventory-worker": "./dist/composition/artifactInventoryWorkerProcess.js"
   },
   "bin": {
     "rea": "scripts/rea.mjs",
