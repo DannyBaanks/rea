@@ -155,6 +155,17 @@ const scanCanonical = async (
     if (readerCreationFailure !== undefined) throw readerCreationFailure.cause;
     if (reader instanceof AsarArtifactReader)
       await reader.prepareContainer(rootDigest?.sha256, options.signal);
+    if (options.onRung !== undefined) {
+      await options.onRung({
+        rung: 0,
+        label: `root-${rootFormat}`,
+        sha256: rootDigest?.sha256 ?? "0".repeat(64),
+        nodes: 0,
+        occurrences: 0,
+        entriesProcessed: 0,
+        lastPath: path,
+      });
+    }
     const {
       nodes,
       occurrences,
@@ -171,6 +182,11 @@ const scanCanonical = async (
       options.integrity,
       options.asarHeaderAdmission,
       options.acquisitionLimits,
+      {
+        maxEntries: options.maxEntries,
+        rungInterval: options.rungInterval,
+        onRung: options.onRung,
+      },
     );
     outcome = {
       kind: "completed",

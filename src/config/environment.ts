@@ -52,6 +52,8 @@ const environmentSchema = z.object({
   REA_MCP_OUTPUT_SCHEMA_PROFILE: mcpOutputSchemaProfileSchema.optional(),
   REA_MCP_TOOL_CATALOG_PROFILE: mcpToolCatalogProfileSchema.optional(),
   REA_MCP_TOOL_PROFILE: mcpToolProfileSchema.optional(),
+  /** Fork opt-in: "1" runs artifact inventory in a supervised, heap-capped worker. */
+  REA_ARTIFACT_INVENTORY_WORKER: z.enum(["0", "1"]).optional(),
   REA_IDA_MCP_CONFIG: z
     .string()
     .min(1)

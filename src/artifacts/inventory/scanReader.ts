@@ -27,7 +27,10 @@ import {
   DirectoryArtifactReader,
   DirectoryArtifactTraversalLimit,
 } from "../DirectoryArtifactReader.js";
-import type { ArtifactInventoryOptions } from "./types.js";
+import type {
+  ArtifactInventoryOptions,
+  ArtifactInventoryRungCheckpoint,
+} from "./types.js";
 import { AsarArtifactReader } from "../AsarArtifactReader.js";
 import {
   InesArtifactReader,
@@ -61,6 +64,31 @@ const emptyScan = (): {
   readonly pendingContradictions: PendingIntegrityContradiction[];
 } => ({ nodes: new Map(), occurrences: [], pendingContradictions: [] });
 
+export interface ScanReaderLadderOptions {
+  readonly maxEntries?: number | undefined;
+  readonly rungInterval?: number | undefined;
+  readonly onRung?:
+    | ((checkpoint: ArtifactInventoryRungCheckpoint) => void | Promise<void>)
+    | undefined;
+}
+
+const DEFAULT_RUNG_INTERVAL = 500;
+const INITIAL_RUNG_CHAIN = "0".repeat(64);
+
+const hashRungChain = (
+  previousSha256: string,
+  rung: number,
+  entriesProcessed: number,
+  nodes: number,
+  occurrences: number,
+  lastPath: string | undefined,
+): string =>
+  createHash("sha256")
+    .update(
+      `${previousSha256}:${String(rung)}:${String(entriesProcessed)}:${String(nodes)}:${String(occurrences)}:${lastPath ?? ""}`,
+    )
+    .digest("hex");
+
 interface ScanContext {
   readonly acquisitionLimits: ArtifactInventoryOptions["acquisitionLimits"];
   entriesExamined: number;
@@ -84,6 +112,14 @@ interface ScanContext {
       }
     | undefined;
   readonly traversal: ArtifactTraversalObservation;
+  readonly maxEntries: number | undefined;
+  readonly rungInterval: number;
+  readonly onRung:
+    | ((checkpoint: ArtifactInventoryRungCheckpoint) => void | Promise<void>)
+    | undefined;
+  entriesProcessed: number;
+  rungIndex: number;
+  rungChainSha256: string;
 }
 
 export const scanReader = async (
@@ -93,6 +129,7 @@ export const scanReader = async (
   integrity: ArtifactIntegrityPolicyName = "fail",
   asarHeaderAdmission?: AsarHeaderAdmission,
   acquisitionLimits?: ArtifactInventoryOptions["acquisitionLimits"],
+  ladder: ScanReaderLadderOptions = {},
 ): Promise<{
   readonly nodes: Map<string, ArtifactNode>;
   readonly occurrences: MutableOccurrence[];
@@ -139,6 +176,12 @@ export const scanReader = async (
         ? { hash: createHash("sha256"), regionOrder: [], bytes: 0 }
         : undefined,
     traversal: new ArtifactTraversalObservation(),
+    maxEntries: ladder.maxEntries,
+    rungInterval: Math.max(1, ladder.rungInterval ?? DEFAULT_RUNG_INTERVAL),
+    onRung: ladder.onRung,
+    entriesProcessed: 0,
+    rungIndex: 0,
+    rungChainSha256: INITIAL_RUNG_CHAIN,
   };
   await visitArtifactEntries(context, reader, "");
   const rootContradiction = containerContradiction(reader, integrity);
@@ -249,6 +292,18 @@ const visitArtifactEntries = async (
         stack.pop();
         continue;
       }
+      if (
+        context.maxEntries !== undefined &&
+        context.entriesProcessed >= context.maxEntries
+      ) {
+        context.traversal.onCoverage({
+          status: "unknown",
+          limitations: [
+            `Artifact traversal stopped at ladder cap (${String(context.maxEntries)} entries; remaining entries starting at ${JSON.stringify(frame.prefix.length === 0 ? next.value.path : `${frame.prefix}/${next.value.path}`)} were omitted).`,
+          ],
+        });
+        break;
+      }
       const entry = next.value;
       if (
         context.acquisitionLimits !== undefined &&
@@ -340,6 +395,30 @@ const visitArtifactEntries = async (
           );
       }
       context.occurrences.push(occurrence);
+      context.entriesProcessed += 1;
+      if (
+        context.onRung !== undefined &&
+        context.entriesProcessed % context.rungInterval === 0
+      ) {
+        context.rungIndex += 1;
+        context.rungChainSha256 = hashRungChain(
+          context.rungChainSha256,
+          context.rungIndex,
+          context.entriesProcessed,
+          context.nodes.size,
+          context.occurrences.length,
+          logicalPath,
+        );
+        await context.onRung({
+          rung: context.rungIndex,
+          label: `entries-${String(context.entriesProcessed)}`,
+          sha256: context.rungChainSha256,
+          nodes: context.nodes.size,
+          occurrences: context.occurrences.length,
+          entriesProcessed: context.entriesProcessed,
+          lastPath: logicalPath,
+        });
+      }
       if (
         expandableAsar &&
         digested !== undefined &&

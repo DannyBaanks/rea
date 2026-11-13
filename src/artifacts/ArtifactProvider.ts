@@ -27,6 +27,10 @@ import { traceDylibResolution } from "./apple/DylibResolutionReader.js";
 import { dirname } from "node:path";
 import { withArtifactTargetIdentity } from "./withArtifactTargetIdentity.js";
 import { inventoryArtifact } from "./inventory/ArtifactInventory.js";
+import {
+  artifactInventoryWorkerSelected,
+  runArtifactInventoryLadder,
+} from "./inventory/ArtifactInventoryWorker.js";
 import { extractArtifact } from "./extraction/ArtifactExtraction.js";
 import { analyzeInterfaceBuilderBundle } from "./apple/InterfaceBuilderAnalysis.js";
 import { analyzeAppleAssetCatalogs } from "./apple/AppleAssetCatalogAnalysis.js";
@@ -41,6 +45,7 @@ import {
   type BinaryTarget,
 } from "../domain/binaryTargetTypes.js";
 import {
+  AnalysisCancelledError,
   AnalysisCapabilityUnavailableError,
   AnalysisUnsupportedTargetError,
 } from "../domain/analysisErrorCore.js";
@@ -546,34 +551,49 @@ class ArtifactClient implements AnalysisClient {
     );
   }
 
-  private inventory(
+  private async inventory(
     parsed: {
       readonly integrity_policy: "fail" | "record-and-continue";
       readonly artifact_limits?: ArtifactReaderLimitsInput | undefined;
     },
     options?: ExecutionOptions,
   ) {
-    return inventoryArtifact(this.target.sourcePath ?? this.target.path, {
+    const inventory = {
       expectedRootSha256:
         this.target.bundleInfoPlist === undefined
           ? this.target.sha256
           : undefined,
       selectedPath: this.target.artifactSelectedPath,
-      resourceScope: this.#resourceScope,
-      environment: this.environment,
       asarHeaderAdmission: runtimeAsarHeaderAdmission(
         this.environment,
         this.settings,
       ),
       espFlashSelection: espFlashSelection(this.target),
-      ...(options?.signal === undefined ? {} : { signal: options.signal }),
-      integrity: parsed.integrity_policy,
       ...(parsed.artifact_limits === undefined
         ? {}
         : {
             readerLimits: resolveArtifactReaderLimits(parsed.artifact_limits),
           }),
+    };
+    if (!artifactInventoryWorkerSelected(this.environment))
+      return inventoryArtifact(this.target.sourcePath ?? this.target.path, {
+        ...inventory,
+        resourceScope: this.#resourceScope,
+        environment: this.environment,
+        ...(options?.signal === undefined ? {} : { signal: options.signal }),
+        integrity: parsed.integrity_policy,
+      });
+    // Fork opt-in: a supervised, heap-capped worker; on a resource or time
+    // limit it retries once bounded at the last proven entry count.
+    const result = await runArtifactInventoryLadder({
+      inputPath: this.target.sourcePath ?? this.target.path,
+      environment: this.environment,
+      integrityMode: parsed.integrity_policy,
+      ...(options?.signal === undefined ? {} : { signal: options.signal }),
+      inventory,
     });
+    if (!result.ok) throw result.error;
+    return result.value;
   }
 }
 

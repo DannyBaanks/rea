@@ -306,7 +306,13 @@ Malbolge programs mutate their own memory space and encrypt instructions after e
 
 To prevent memory exhaustion and denial-of-service from massive memory dumps or extended-Malbolge cores (such as the 371 MB malbolge-lisp core), `readSource` checks file size via `stat` before reading. Files exceeding `MAX_MALBOLGE_SOURCE_BYTES = 8 * 1024 * 1024` (8 MiB) are rejected immediately before touching host RAM.
 
-### 5. Upstream baseline & divergence state
+### 5. Optional supervised artifact inventory (`REA_ARTIFACT_INVENTORY_WORKER=1`)
+
+With `REA_ARTIFACT_INVENTORY_WORKER=1`, `inspect_artifact` inventories the target in a separate, heap-capped worker process that reports SHA-256-chained progress checkpoints. If the worker hits its memory or time limit, REA retries once, bounded at the last entry count it proved, and records the cut as incomplete traversal coverage. This keeps one oversized archive from exhausting the host.
+
+It is off by default. The worker cannot share the parent's resource scope, so it does not carry upstream 6.9.0's descriptor-cleanup authority, typed reader-failure details or cancellation causes; the default in-process path keeps those contracts. Enable it only for targets that risk exhausting memory.
+
+### 6. Upstream baseline & divergence state
 
 | Property            | Value                                                                          |
 | ------------------- | ------------------------------------------------------------------------------ |

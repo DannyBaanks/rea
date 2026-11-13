@@ -4,6 +4,17 @@ import type { AsarHeaderAdmission } from "../../config/asarHeaderAdmission.js";
 import type { ArtifactResourceScope } from "../ArtifactResourceScope.js";
 import type { ArtifactReaderLimits } from "../../domain/artifactReaderLimits.js";
 
+/** Monotonic SHA-256-chained progress checkpoint emitted during inventory traversal. */
+export interface ArtifactInventoryRungCheckpoint {
+  readonly rung: number;
+  readonly label: string;
+  readonly sha256: string;
+  readonly nodes: number;
+  readonly occurrences: number;
+  readonly entriesProcessed: number;
+  readonly lastPath?: string | undefined;
+}
+
 /** Options shared by artifact inventory scans. */
 export interface ArtifactInventoryOptions {
   /** Optional acquisition bounds; exhaustion retains a partial inventory. */
@@ -29,4 +40,9 @@ export interface ArtifactInventoryOptions {
    * image; detection with defaults applies otherwise.
    */
   readonly espFlashSelection?: EspFlashSelection | undefined;
+  readonly maxEntries?: number | undefined;
+  readonly rungInterval?: number | undefined;
+  readonly onRung?:
+    | ((checkpoint: ArtifactInventoryRungCheckpoint) => void | Promise<void>)
+    | undefined;
 }

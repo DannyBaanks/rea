@@ -9,6 +9,7 @@
     "src/mcpDoctor.ts",
     "src/composition/javascriptAnalysisWorkerProcess.ts",
     "src/composition/webBundleAnalysisWorkerProcess.ts",
+    "src/composition/artifactInventoryWorkerProcess.ts",
     "src/contracts/errorSchemas.ts",
     "scripts/verify/fridaBindingsCompatibility.ts",
     "scripts/verify/termux/browser.mjs",

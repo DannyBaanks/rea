@@ -273,7 +273,13 @@ Los programas en Malbolge mutan continuamente su propia memoria y cifran cada in
 
 Para prevenir agotamiento de memoria del host ante volcados masivos o núcleos de extended-Malbolge (como el núcleo de 371 MB de malbolge-lisp), `readSource` comprueba el tamaño del archivo con `stat` antes de leerlo. Fuentes que superen los 8 MiB (`MAX_MALBOLGE_SOURCE_BYTES = 8 * 1024 * 1024`) son rechazadas de inmediato antes de consumir memoria RAM.
 
-### 5. Estado de sincronización y línea base
+### 5. Inventario de artefactos supervisado opcional (`REA_ARTIFACT_INVENTORY_WORKER=1`)
+
+Con `REA_ARTIFACT_INVENTORY_WORKER=1`, `inspect_artifact` inventaria el objetivo en un proceso aparte con límite de heap, que reporta puntos de control encadenados con SHA-256. Si el worker toca su límite de memoria o de tiempo, REA reintenta una vez acotado al último número de entradas que demostró, y deja el corte registrado como cobertura de recorrido incompleta. Así un archivo enorme no agota la memoria del host.
+
+Viene apagado por defecto. El worker no puede compartir el ámbito de recursos del proceso padre, así que no conserva la autoridad de limpieza de descriptores, los detalles tipados de fallos del lector ni las causas de cancelación de upstream 6.9.0; la ruta en proceso por defecto sí los conserva. Actívalo solo para objetivos que puedan agotar la memoria.
+
+### 6. Estado de sincronización y línea base
 
 | Propiedad              | Valor                                                                          |
 | ---------------------- | ------------------------------------------------------------------------------ |
