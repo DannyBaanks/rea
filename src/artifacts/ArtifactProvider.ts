@@ -11,7 +11,7 @@ import {
 import { inspectBundleKeyedArchive } from "./apple/KeyedArchiveReader.js";
 import { traceDylibResolution } from "./apple/DylibResolutionReader.js";
 import { basename, dirname } from "node:path";
-import { inventoryArtifact } from "./inventory/ArtifactInventory.js";
+import { runArtifactInventoryLadder } from "./inventory/ArtifactInventoryWorker.js";
 import { extractArtifact } from "./extraction/ArtifactExtraction.js";
 import { analyzeInterfaceBuilderBundle } from "./apple/InterfaceBuilderAnalysis.js";
 import { analyzeAppleAssetCatalogs } from "./apple/AppleAssetCatalogAnalysis.js";
@@ -26,8 +26,12 @@ import {
   type BinaryTarget,
 } from "../domain/binaryTargetTypes.js";
 import {
+  AnalysisCancelledError,
   AnalysisCapabilityUnavailableError,
   AnalysisInputError,
+  AnalysisOutputError,
+  AnalysisResourceConstraintError,
+  AnalysisTimeoutError,
   AnalysisUnsupportedTargetError,
 } from "../domain/analysisErrorCore.js";
 import { ArtifactOperationError } from "../domain/artifactOperationError.js";
@@ -380,18 +384,20 @@ class ArtifactClient implements AnalysisClient {
     );
   }
 
-  private inventory(
+  private async inventory(
     parsed: {
       readonly integrity_policy: "fail" | "record-and-continue";
     },
     options?: ExecutionOptions,
   ) {
-    return inventoryArtifact(this.target.sourcePath ?? this.target.path, {
-      resourceScope: this.#resourceScope,
+    const result = await runArtifactInventoryLadder({
+      inputPath: this.target.sourcePath ?? this.target.path,
       environment: this.environment,
+      integrityMode: parsed.integrity_policy,
       ...(options?.signal === undefined ? {} : { signal: options.signal }),
-      integrity: { mode: parsed.integrity_policy },
     });
+    if (!result.ok) throw result.error;
+    return result.value;
   }
 }
 
@@ -424,7 +430,13 @@ export const translateArtifactFailure = (
   // their correction details instead of reducing them to an I/O failure.
   if (
     cause instanceof AnalysisInputError ||
-    cause instanceof AnalysisUnsupportedTargetError
+    cause instanceof AnalysisUnsupportedTargetError ||
+    cause instanceof AnalysisCancelledError ||
+    cause instanceof AnalysisTimeoutError ||
+    cause instanceof AnalysisResourceConstraintError ||
+    cause instanceof AnalysisOutputError ||
+    cause instanceof ProviderCleanupError ||
+    cause instanceof ArtifactOperationError
   )
     return cause;
   return new ArtifactOperationError(operation, "io");
