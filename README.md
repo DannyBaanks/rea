@@ -40,11 +40,10 @@
 > This repository is a specialized development fork maintained by DannyBaanks and the ISyCo research group (`https://github.com/DannyBaanks/rea`).
 >
 > - **Upstream Repository**: morluto/rea (https://github.com/morluto/rea)
-> - **Base Release Tag**: `rea-agents-6.5.0` (`3b79af28e80785afce9f5998d8f03289402a1847`, released Oct 14, 2026)
-> - **Upstream Synchronized**: Commit `fffb0741936067530d1ce9777461cd53e87398c2` (Oct 15, 2026; incorporates 60 upstream post-6.5.0 stability & verification fixes)
-> - **Current Fork State**: `rea-agents-6.5.0-62-g6e01c226c` (62 commits ahead of the 6.5.0 tag)
+> - **Base Release Tag**: `rea-agents-6.9.0` (`d74549e495c58eb4a560279fd9f05508401ea0a0`, released Nov 12, 2026); requires Node.js 24.x >=24.22.1 (or 22.x >=22.23.4, 26.12.1+)
+> - **Fork commits**: ported from the 6.5.0-based fork (`fffb07419`) with `git cherry-pick -x`; run `git log rea-agents-6.9.0..HEAD` for the current list
 > - **Key Improvements**:
->   1. **Compact MCP Catalog Profile** (`REA_MCP_TOOL_PROFILE=compact`): Progressive disclosure surface advertising only 3 meta-tools (`rea_discover`, `rea_describe`, `rea_execute`), reducing advertised schemas from 3.48 MB (213 tools) down to 7 KB (99.8% token reduction) while maintaining full tool access.
+>   1. **Compact MCP Catalog Profile** (`REA_MCP_TOOL_PROFILE=compact`): Progressive disclosure surface advertising only 3 meta-tools (`rea_discover`, `rea_describe`, `rea_execute`), advertising about 4.6 KB instead of about 4.7 MB of schemas on 6.9.0 while every tool stays callable through `rea_execute`. It is an alternative to upstream's `REA_MCP_TOOL_CATALOG_PROFILE=hot-cold` and cannot be combined with it.
 >   2. **Classic Malbolge Analysis Family**: Complete static decoding (`inspect_malbolge`), bounded in-process tracing (`trace_malbolge`), and structural decompilation projection (`decompile_malbolge`).
 >   3. **Auditable Self-Modifying Memory & SHA-256 State Digests**: Step-by-step writeback logging (`position`, `value_before`, `value_after`), UUID execution tracking, and deterministic 59,049-word ternary memory digests.
 >   4. **Fail-Closed 8 MiB DoS Protection**: `readSource` denies oversized sources via `stat` before loading into host RAM.
@@ -245,7 +244,9 @@ rea --help
 
 ### 1. Compact MCP catalog profile (`REA_MCP_TOOL_PROFILE=compact`)
 
-In standard upstream REA, starting the MCP server advertises all 213 tools immediately, generating a schema payload of **3,487,784 bytes (~3.48 MB)**. For agents with strict tool-call constraints or context-window limits (such as Claude Code, Cursor, Gemini CLI, Grok, or Kimi), this large tool payload leads to truncated system instructions, high context costs, and high latency.
+By default the REA MCP server advertises every tool and its schemas at once. For agents with strict tool-count or context-window limits (such as opencode, Cursor, Gemini CLI, Grok, or Kimi), that payload truncates instructions and raises context cost and latency.
+
+Measured on rea-agents 6.9.0 (2026-11-13, `tools/list` over stdio): the default profile advertises **258 tools / 4,693,331 bytes**, upstream's `REA_MCP_TOOL_CATALOG_PROFILE=hot-cold` advertises 5 tools / 97,871 bytes, and the compact profile advertises **3 tools / 4,580 bytes**. Re-measure after upgrading; these figures drift with every release.
 
 The compact profile implements progressive capability disclosure:
 
@@ -253,8 +254,10 @@ The compact profile implements progressive capability disclosure:
   - `rea_discover`: Query tools by name, category (`kind`), or keyword, returning capped 160-character summaries.
   - `rea_describe`: Resolves and returns the full schema and contract for a specific tool on demand.
   - `rea_execute`: Dispatches tool invocation, validating arguments strictly against the target schema and enforcing admission controls.
-- **Payload reduction**: From 3,487,784 bytes (213 tools) to **7,065 bytes** (3 tools) — a **99.8% reduction in token overhead**.
-- **Full capability access**: All 213 upstream tools remain fully registered, admitted, and callable through `rea_execute`.
+- **Scope**: honours `REA_MCP_TOOL_FAMILIES`; capabilities outside the selected families are neither discoverable nor executable.
+- **Provenance**: dispatched results keep REA's untrusted target-content marker.
+- **Exclusive**: the server refuses to start when `REA_MCP_TOOL_PROFILE=compact` is combined with `REA_MCP_TOOL_CATALOG_PROFILE=hot-cold`; the compact profile runs on the eager runtime.
+- **Full capability access**: every registered tool stays registered (hidden from `tools/list`) and callable through `rea_execute`.
 
 To activate the compact profile:
 
@@ -288,18 +291,7 @@ Adds native support for analyzing and reverse-engineering programs written in Cl
 
 For `trace_malbolge`, set `eof_mode` to `olmstead_1998` to model exhausted input as the ten-trit value 59048. The default, `legacy_minus_one`, preserves the ISyCo port's existing EOF convention. The selected mode is recorded in Evidence; the two modes can produce different control flow and output after EOF.
 
-CLI usage examples:
-
-```sh
-# Decode source structure statically
-npx rea-agents inspect_malbolge /path/to/program.mal
-
-# Trace execution with bounded step budget
-npx rea-agents trace_malbolge /path/to/program.mal --max_steps 50000
-
-# Structural decompilation projection
-npx rea-agents decompile_malbolge /path/to/program.mal
-```
+The Malbolge family is MCP-only: there are no dedicated CLI commands. Call the tools from an MCP client, or through `rea_execute` under the compact profile.
 
 ### 3. Auditable self-modifying memory & cryptographic state digests
 
@@ -316,15 +308,14 @@ To prevent memory exhaustion and denial-of-service from massive memory dumps or 
 
 ### 5. Upstream baseline & divergence state
 
-| Property                     | Value                                                                          |
-| ---------------------------- | ------------------------------------------------------------------------------ |
-| Upstream Repository          | morluto/rea                                                                    |
-| Fork Repository              | DannyBaanks/rea                                                                |
-| Base Upstream Tag            | rea-agents-6.5.0 (commit 3b79af28e80785afce9f5998d8f03289402a1847, 2026-10-14) |
-| Synchronized Upstream Commit | fffb0741936067530d1ce9777461cd53e87398c2 (2026-10-15)                          |
-| Git Describe                 | rea-agents-6.5.0-62-g6e01c226c                                                 |
-| Commits Ahead of Tag         | 62 total (60 upstream post-6.5.0 fixes + 2 fork feature suites)                |
-| Active Fork Branch           | main (tracking privado/main)                                                   |
+| Property            | Value                                                                          |
+| ------------------- | ------------------------------------------------------------------------------ |
+| Upstream Repository | morluto/rea                                                                    |
+| Fork Repository     | DannyBaanks/rea                                                                |
+| Base Upstream Tag   | rea-agents-6.9.0 (commit d74549e495c58eb4a560279fd9f05508401ea0a0, 2026-11-12) |
+| Previous fork base  | rea-agents-6.5.0 + upstream fffb0741936067530d1ce9777461cd53e87398c2           |
+| Port method         | `git cherry-pick -x` of each fork commit onto the 6.9.0 tag                    |
+| Current divergence  | `git log --oneline rea-agents-6.9.0..HEAD`                                     |
 
 ## How REA works
 
